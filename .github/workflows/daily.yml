@@ -1,0 +1,83 @@
+# =============================================================
+#  매일 밤 11시(한국시간)에 국내 주식 시세를 자동으로 수집합니다.
+# =============================================================
+#  ★ 실행 전 준비 (깃허브 웹사이트에서 딱 한 번만) ★
+#    저장소 > Settings > Secrets and variables > Actions >
+#    [New repository secret] 버튼으로 아래 3개를 등록하세요.
+#
+#      이름(Name)        값(Secret)
+#      ---------------   ------------------------------------
+#      DATABASE_URL      Neon 연결 문자열 (postgresql://...)
+#      KRX_ID            한국거래소 data.krx.co.kr 아이디
+#      KRX_PW            한국거래소 비밀번호
+#
+#    ※ 여기에 등록한 값은 깃허브가 암호화해서 보관하며,
+#      실행 기록(로그)에도 자동으로 가려져서 표시됩니다.
+# =============================================================
+
+name: 매일 시세 수집
+
+on:
+  schedule:
+    # cron 시간은 세계표준시(UTC) 기준입니다.
+    # 한국시간 = UTC + 9시간  →  밤 11시(23시) KST = 14시 UTC
+    - cron: "0 14 * * *"
+
+  # 깃허브 화면에서 [Run workflow] 버튼으로 직접 돌릴 수도 있게 합니다.
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: "수집할 날짜 (YYYY-MM-DD). 비워두면 오늘"
+        required: false
+        default: ""
+
+# 여러 실행이 동시에 겹쳐 돌지 않도록 막습니다.
+concurrency:
+  group: daily-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: 시세 수집
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 코드 내려받기
+        uses: actions/checkout@v4
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 부품(라이브러리) 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 시세 수집 실행
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          # 깃허브 서버는 세계표준시를 쓰므로 한국시간으로 맞춰줍니다.
+          TZ: Asia/Seoul
+          # 공용 서버에서는 조금 더 여유 있게 요청합니다.
+          REQUEST_DELAY_SEC: "0.8"
+        run: |
+          if [ -n "${{ github.event.inputs.target_date }}" ]; then
+            python -m src.daily_collect --date "${{ github.event.inputs.target_date }}"
+          else
+            python -m src.daily_collect
+          fi
+
+      - name: 실패 시 안내
+        if: failure()
+        run: |
+          echo "::error::수집에 실패했습니다."
+          echo "확인할 점:"
+          echo " 1) Settings > Secrets 에 DATABASE_URL, KRX_ID, KRX_PW 가 등록되어 있는지"
+          echo " 2) Neon 프로젝트가 살아 있는지 (무료 플랜은 오래 안 쓰면 잠들 수 있습니다)"
+          echo " 3) 한국거래소 비밀번호 변경 요구가 떠 있지는 않은지"

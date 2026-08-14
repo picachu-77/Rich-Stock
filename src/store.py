@@ -1,0 +1,203 @@
+"""
+가져온 데이터를 데이터베이스에 '저장'하는 담당 파일.
+
+핵심 개념: UPSERT
+  같은 종목·같은 날짜 데이터를 두 번 저장해도 줄이 두 개 생기지 않고,
+  기존 줄을 새 값으로 덮어씁니다. 그래서 수집기를 몇 번 돌려도 안전합니다.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+
+from .db import bulk_upsert, fetch_all, run_sql
+
+# ── 종목 목록 저장 ────────────────────────────────────────────
+UPSERT_TICKER_SQL = """
+INSERT INTO ticker (code, name, market, kind, is_active, first_seen, last_seen)
+VALUES %s
+ON CONFLICT (code) DO UPDATE SET
+    name       = EXCLUDED.name,
+    market     = EXCLUDED.market,
+    kind       = EXCLUDED.kind,
+    is_active  = TRUE,
+    first_seen = LEAST(ticker.first_seen, EXCLUDED.first_seen),
+    last_seen  = GREATEST(ticker.last_seen, EXCLUDED.last_seen),
+    updated_at = now();
+"""
+
+
+def save_tickers(conn, tickers: list[dict], as_of: date) -> int:
+    """종목 목록을 저장(갱신)합니다."""
+    rows = [
+        (t["code"], t["name"], t["market"], t["kind"], True, as_of, as_of)
+        for t in tickers
+    ]
+    return bulk_upsert(conn, UPSERT_TICKER_SQL, rows)
+
+
+def mark_delisted(conn, as_of: date) -> int:
+    """
+    오늘 목록에서 사라진 종목을 '상장폐지(is_active=FALSE)'로 표시합니다.
+    데이터를 지우지는 않습니다 — 과거 시세는 그대로 남겨둡니다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE ticker
+               SET is_active = FALSE, updated_at = now()
+             WHERE is_active = TRUE
+               AND (last_seen IS NULL OR last_seen < %s);
+            """,
+            (as_of,),
+        )
+        return cur.rowcount
+
+
+# ── 일별 시세 저장 ────────────────────────────────────────────
+UPSERT_PRICE_SQL = """
+INSERT INTO daily_price (code, trade_date, close, change_pct, volume, market_cap)
+VALUES %s
+ON CONFLICT (code, trade_date) DO UPDATE SET
+    close      = EXCLUDED.close,
+    change_pct = COALESCE(EXCLUDED.change_pct, daily_price.change_pct),
+    volume     = EXCLUDED.volume,
+    market_cap = COALESCE(EXCLUDED.market_cap, daily_price.market_cap);
+"""
+
+
+def save_prices(conn, rows: list[tuple]) -> int:
+    """일별 시세를 저장합니다."""
+    return bulk_upsert(conn, UPSERT_PRICE_SQL, rows)
+
+
+# ── 수집 진행 기록 ────────────────────────────────────────────
+def log_ingest(conn, trade_date: date, kind: str, status: str,
+               row_count: int = 0, message: str | None = None) -> None:
+    """'이 날짜의 이 종류는 처리 끝'이라고 기록해 둡니다 (이어받기용)."""
+    run_sql(
+        conn,
+        """
+        INSERT INTO ingest_log (trade_date, kind, status, row_count, message, updated_at)
+        VALUES (%s, %s, %s, %s, %s, now())
+        ON CONFLICT (trade_date, kind) DO UPDATE SET
+            status     = EXCLUDED.status,
+            row_count  = EXCLUDED.row_count,
+            message    = EXCLUDED.message,
+            updated_at = now();
+        """,
+        (trade_date, kind, status, row_count, message),
+    )
+
+
+def completed_dates(conn, kind: str) -> set[date]:
+    """이미 처리가 끝난 날짜 목록 (실패한 날은 제외 → 다시 시도하게 됨)."""
+    rows = fetch_all(
+        conn,
+        "SELECT trade_date FROM ingest_log WHERE kind = %s AND status IN ('done','holiday');",
+        (kind,),
+    )
+    return {r[0] for r in rows}
+
+
+# ── 등락률 보정 ──────────────────────────────────────────────
+# 며칠 이내를 '바로 전 거래일'로 볼 것인지.
+#
+# 왜 14일인가:
+#   국내 증시는 추석·설 연휴에 길게 쉽니다.
+#   예) 2025년 추석은 10/3 개천절부터 10/9 한글날까지 이어져
+#       10/2 다음 거래일이 10/10 이었습니다 (간격 8일).
+#   이런 정상적인 연휴를 '데이터 구멍'으로 오해해서 멀쩡한 등락률을
+#   지우는 일이 없도록 넉넉하게 14일로 둡니다.
+#
+#   이 장치의 진짜 목적은 '아직 과거 데이터를 다 못 받은 상태'에서
+#   몇 달~몇 년 전 가격과 비교한 값이 하루 등락률 자리에 들어가는 것을
+#   막는 것입니다.
+MAX_GAP_DAYS = 14
+
+
+def fill_missing_change_pct(conn) -> int:
+    """
+    등락률이 비어 있는 줄을, 바로 전 거래일 종가와 비교해 직접 계산해 채웁니다.
+    (ETF 는 거래소가 등락률을 안 주기 때문에 필요합니다)
+
+    ★ 중요 ★
+    '바로 전 거래일' 이 7일 이상 떨어져 있으면 계산하지 않고 비워 둡니다.
+    데이터를 아직 다 못 받아서 중간이 비어 있을 때, 몇 달~몇 년 전 가격과
+    비교한 엉뚱한 값이 '하루 등락률' 자리에 들어가는 것을 막기 위해서입니다.
+    나중에 빈 날짜가 채워지면 이 함수를 다시 돌려서 정상값을 넣습니다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH calc AS (
+                SELECT code,
+                       trade_date,
+                       close,
+                       LAG(close)      OVER (PARTITION BY code ORDER BY trade_date) AS prev_close,
+                       LAG(trade_date) OVER (PARTITION BY code ORDER BY trade_date) AS prev_date
+                  FROM daily_price
+            )
+            UPDATE daily_price d
+               SET change_pct = ROUND((c.close - c.prev_close)::numeric
+                                      / c.prev_close * 100, 4)
+              FROM calc c
+             WHERE d.code = c.code
+               AND d.trade_date = c.trade_date
+               AND d.change_pct IS NULL
+               AND c.prev_close IS NOT NULL
+               AND c.prev_close > 0
+               AND c.prev_date IS NOT NULL
+               AND (c.trade_date - c.prev_date) <= %s;
+            """,
+            (MAX_GAP_DAYS,),
+        )
+        return cur.rowcount
+
+
+def clear_bogus_change_pct(conn) -> int:
+    """
+    이미 잘못 채워진 등락률을 지웁니다.
+    (직전 저장일이 7일 넘게 떨어져 있는데 값이 들어가 있는 경우)
+    거래소가 직접 준 값인지 우리가 계산한 값인지 구분할 수 없으므로,
+    간격이 벌어진 줄만 비우고 나중에 다시 계산되게 합니다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH calc AS (
+                SELECT code,
+                       trade_date,
+                       LAG(trade_date) OVER (PARTITION BY code ORDER BY trade_date) AS prev_date
+                  FROM daily_price
+            )
+            UPDATE daily_price d
+               SET change_pct = NULL
+              FROM calc c
+             WHERE d.code = c.code
+               AND d.trade_date = c.trade_date
+               AND d.change_pct IS NOT NULL
+               AND c.prev_date IS NOT NULL
+               AND (c.trade_date - c.prev_date) > %s;
+            """,
+            (MAX_GAP_DAYS,),
+        )
+        return cur.rowcount
+
+
+# ── 현황 요약 ────────────────────────────────────────────────
+def summary(conn) -> dict:
+    """지금 창고에 뭐가 얼마나 들어 있는지 요약합니다."""
+    (ticker_cnt, active_cnt) = fetch_all(
+        conn, "SELECT count(*), count(*) FILTER (WHERE is_active) FROM ticker;"
+    )[0]
+    (price_cnt, min_d, max_d) = fetch_all(
+        conn, "SELECT count(*), min(trade_date), max(trade_date) FROM daily_price;"
+    )[0]
+    return {
+        "ticker_total": ticker_cnt,
+        "ticker_active": active_cnt,
+        "price_rows": price_cnt,
+        "first_date": min_d,
+        "last_date": max_d,
+    }

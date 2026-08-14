@@ -1,0 +1,14 @@
+# Streamlit 화면 설정
+# 이 파일은 app.py 를 실행할 때 자동으로 적용됩니다.
+
+[client]
+# 우측 상단의 영어 메뉴(Deploy, Rerun, Clear caches ...)를 숨깁니다.
+toolbarMode = "minimal"
+
+[browser]
+# 사용 통계를 보내지 않습니다.
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2563eb"

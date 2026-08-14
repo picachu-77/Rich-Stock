@@ -1,0 +1,22 @@
+# 비밀 정보 - 절대 깃허브에 올라가면 안 되는 파일
+.env
+.streamlit/secrets.toml
+
+# 파이썬이 자동으로 만드는 임시 파일
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 가상환경 폴더 (부품 라이브러리가 설치되는 곳, 용량이 큼)
+.venv/
+venv/
+env/
+
+# 운영체제가 만드는 잡파일
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 로그/임시 결과물
+*.log
+.cache/
