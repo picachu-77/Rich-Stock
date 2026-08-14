@@ -21,8 +21,19 @@ import argparse
 from datetime import datetime, timedelta
 
 from .db import get_conn
-from .krx import fetch_etf_prices, fetch_stock_prices, kst_today
-from .store import fill_missing_change_pct, log_ingest, save_prices, summary
+from .krx import (
+    fetch_etf_prices,
+    fetch_fundamentals,
+    fetch_stock_prices,
+    kst_today,
+)
+from .store import (
+    fill_missing_change_pct,
+    log_ingest,
+    save_fundamentals,
+    save_prices,
+    summary,
+)
 from .update_tickers import refresh_tickers
 
 
@@ -64,6 +75,25 @@ def collect_one_day(conn, day) -> tuple[int, bool]:
     else:
         log_ingest(conn, day, "ETF", "holiday", 0, "자료 없음")
         print("    자료 없음")
+
+    # ── 투자지표(PER/PBR/EPS/BPS/배당) ──
+    # 여기서 문제가 생겨도 위에서 저장한 시세는 그대로 남도록
+    # 따로 떼어내서 오류를 삼킵니다.
+    if got_any:
+        print(f"  - 투자지표(PER/PBR 등) 요청 중...")
+        try:
+            fund_rows = fetch_fundamentals(day)
+            if fund_rows:
+                save_fundamentals(conn, fund_rows)
+                log_ingest(conn, day, "FUNDAMENTAL", "done", len(fund_rows))
+                print(f"    {len(fund_rows):,}종목 저장")
+            else:
+                log_ingest(conn, day, "FUNDAMENTAL", "holiday", 0, "자료 없음")
+                print("    자료 없음")
+        except Exception as exc:  # noqa: BLE001
+            log_ingest(conn, day, "FUNDAMENTAL", "failed", 0, str(exc)[:400])
+            print(f"    [!] 투자지표만 실패했습니다: {exc}")
+            print("        시세는 정상 저장되었습니다. 나중에 다시 받으면 됩니다.")
 
     return saved, not got_any
 

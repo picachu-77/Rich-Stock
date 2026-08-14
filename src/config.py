@@ -134,6 +134,59 @@ def get_krx_credentials() -> tuple[str, str]:
     return krx_id, krx_pw
 
 
+# ── DART(금융감독원 전자공시) 인증키 ────────────────────────────
+# 재무지표 수집에만 씁니다. 이 값이 없어도 시세 수집과 화면은 정상 동작합니다.
+
+_DART_HELP = """
+[!] DART 오픈API 인증키(DART_API_KEY)를 찾지 못했습니다.
+
+  이 키는 '재무지표'(ROE, 부채비율, 영업이익률 등)를 가져올 때만 필요합니다.
+  시세 수집과 화면 보기에는 필요 없습니다.
+
+    1) https://opendart.fss.or.kr 접속
+    2) [인증키 신청/관리] > [오픈API 이용동의] 로 무료 신청
+    3) 메일로 받은 40자리 키를 .env 파일에 아래처럼 추가
+           DART_API_KEY=받은40자리키
+
+  GitHub Actions 에서 실행 중이라면 저장소의
+  Settings > Secrets and variables > Actions 에
+  DART_API_KEY 라는 이름의 secret 이 등록되어 있어야 합니다.
+"""
+
+
+def get_dart_api_key() -> str:
+    """DART 인증키를 돌려줍니다. 없으면 친절한 안내와 함께 멈춥니다."""
+    key = (os.getenv("DART_API_KEY") or "").strip().strip("\"'")
+
+    if not key:
+        try:
+            import streamlit as st
+
+            key = str(st.secrets.get("DART_API_KEY", "")).strip()
+        except Exception:
+            key = ""
+
+    if not key or key.startswith("여기에"):
+        raise RuntimeError(_DART_HELP)
+
+    if len(key) != 40:
+        raise RuntimeError(
+            f"[!] DART_API_KEY 길이가 40자가 아닙니다 (현재 {len(key)}자).\n"
+            "    메일로 받은 인증키 전체를 공백 없이 붙여넣었는지 확인하세요."
+        )
+
+    return key
+
+
+def has_dart_api_key() -> bool:
+    """DART 키가 준비되어 있는지만 조용히 확인합니다 (오류를 내지 않음)."""
+    try:
+        get_dart_api_key()
+        return True
+    except Exception:
+        return False
+
+
 # ── 수집기 동작 설정 ────────────────────────────────────────────
 # 거래소 서버에 부담을 주지 않도록 요청 사이에 쉬는 시간(초)
 REQUEST_DELAY_SEC = float(os.getenv("REQUEST_DELAY_SEC", "0.6"))
@@ -143,3 +196,11 @@ MAX_RETRY = int(os.getenv("MAX_RETRY", "4"))
 
 # 데이터베이스에 한 번에 밀어넣는 줄 수 (너무 크면 메모리 부담)
 DB_BATCH_SIZE = int(os.getenv("DB_BATCH_SIZE", "1000"))
+
+# ── DART 호출 제한 ─────────────────────────────────────────────
+# DART 는 인증키 하나당 하루 2만 건까지만 호출할 수 있습니다.
+# 한도를 넘으면 그날은 더 못 쓰므로, 안전하게 18,000 건에서 스스로 멈춥니다.
+DART_DAILY_LIMIT = int(os.getenv("DART_DAILY_LIMIT", "18000"))
+
+# DART 요청 사이에 쉬는 시간(초)
+DART_REQUEST_DELAY_SEC = float(os.getenv("DART_REQUEST_DELAY_SEC", "0.25"))

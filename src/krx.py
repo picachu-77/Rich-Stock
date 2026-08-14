@@ -219,6 +219,71 @@ def fetch_stock_prices(on: date) -> list[tuple]:
     return rows
 
 
+def fetch_fundamentals(on: date) -> list[tuple]:
+    """
+    특정 하루의 '일반주식 전 종목' 투자지표를 가져옵니다.
+    (ETF 는 이 지표가 없습니다 — 거래소가 제공하지 않습니다)
+
+    가져오는 값
+      PER  주가수익비율   : 주가 ÷ 주당순이익
+      PBR  주가순자산비율 : 주가 ÷ 주당순자산
+      EPS  주당순이익 (원)
+      BPS  주당순자산 (원)
+      DIV  배당수익률 (%)
+      DPS  주당배당금 (원)
+
+    ★ 중요 ★
+      적자 기업은 PER 이 0 으로 옵니다. 이를 그대로 저장하면
+      'PER 낮은순' 정렬에서 적자 기업이 1등이 되는 엉뚱한 일이 생기므로,
+      0 은 '계산 불가'로 보고 빈칸(None)으로 저장합니다.
+      PBR 도 마찬가지입니다.
+      반면 배당수익률(DIV)/주당배당금(DPS)의 0 은 '배당을 안 준다'는
+      실제 정보이므로 0 그대로 저장합니다.
+
+    돌려주는 값:
+      [(종목코드, 날짜, PER, PBR, EPS, BPS, DIV, DPS), ...]
+    """
+    ensure_login()
+    day = ymd(on)
+
+    df = retry(
+        stock.get_market_fundamental, day, market="ALL", what=f"{day} 투자지표"
+    )
+    polite_sleep()
+    if df is None or df.empty:
+        return []
+
+    per = _col(df, "PER")
+    pbr = _col(df, "PBR")
+    eps = _col(df, "EPS")
+    bps = _col(df, "BPS")
+    div = _col(df, "DIV")
+    dps = _col(df, "DPS")
+
+    def _positive_or_none(series, code):
+        """0 이하는 '계산 불가'로 보고 빈칸 처리합니다."""
+        if series is None:
+            return None
+        value = _to_float(series.get(code))
+        return value if value and value > 0 else None
+
+    rows: list[tuple] = []
+    for code in df.index:
+        rows.append(
+            (
+                str(code),
+                on,
+                _positive_or_none(per, code),
+                _positive_or_none(pbr, code),
+                _to_int(eps.get(code)) if eps is not None else None,
+                _to_int(bps.get(code)) if bps is not None else None,
+                _to_float(div.get(code)) if div is not None else None,
+                _to_int(dps.get(code)) if dps is not None else None,
+            )
+        )
+    return rows
+
+
 def fetch_etf_prices(on: date) -> list[tuple]:
     """
     특정 하루의 'ETF 전 종목' 시세를 가져옵니다.

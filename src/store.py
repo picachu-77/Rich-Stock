@@ -71,6 +71,28 @@ def save_prices(conn, rows: list[tuple]) -> int:
     return bulk_upsert(conn, UPSERT_PRICE_SQL, rows)
 
 
+# ── 투자지표(PER/PBR/EPS/BPS/배당) 저장 ────────────────────────
+# 시세와 같은 표(daily_price)에 들어가지만, 저장은 따로 합니다.
+# 그래야 지표 수집이 실패해도 시세는 그대로 남고, 나중에 지표만
+# 따로 채워 넣을 수도 있습니다.
+UPSERT_FUNDAMENTAL_SQL = """
+INSERT INTO daily_price (code, trade_date, per, pbr, eps, bps, div_yield, dps)
+VALUES %s
+ON CONFLICT (code, trade_date) DO UPDATE SET
+    per       = EXCLUDED.per,
+    pbr       = EXCLUDED.pbr,
+    eps       = EXCLUDED.eps,
+    bps       = EXCLUDED.bps,
+    div_yield = EXCLUDED.div_yield,
+    dps       = EXCLUDED.dps;
+"""
+
+
+def save_fundamentals(conn, rows: list[tuple]) -> int:
+    """투자지표를 저장합니다. 시세가 이미 있으면 지표 칸만 덧씌웁니다."""
+    return bulk_upsert(conn, UPSERT_FUNDAMENTAL_SQL, rows)
+
+
 # ── 수집 진행 기록 ────────────────────────────────────────────
 def log_ingest(conn, trade_date: date, kind: str, status: str,
                row_count: int = 0, message: str | None = None) -> None:

@@ -103,15 +103,30 @@ def load_overview() -> pd.DataFrame:
     ),
     cur AS (
         SELECT DISTINCT ON (code)
-               code, trade_date, close, change_pct, volume, market_cap
+               code, trade_date, close, change_pct, volume, market_cap,
+               per, pbr, eps, bps, div_yield
           FROM recent
          ORDER BY code, trade_date DESC
     )
     SELECT t.code, t.name, t.market, t.kind, t.is_active,
            c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
+           c.per, c.pbr, c.eps, c.bps, c.div_yield,
+           f.roe, f.debt_ratio, f.op_margin, f.payout_ratio,
+           f.fiscal_year, f.fiscal_quarter,
            {select_returns}
       FROM cur c
       JOIN ticker t ON t.code = c.code
+      -- 재무지표는 '있으면 붙이고 없으면 빈칸'(LEFT JOIN)으로 가져옵니다.
+      -- 그래야 재무제표가 없는 ETF 도 목록에서 사라지지 않습니다.
+      -- 종목별로 가장 최근 분기 한 줄만 가져옵니다.
+      LEFT JOIN LATERAL (
+          SELECT fi.roe, fi.debt_ratio, fi.op_margin, fi.payout_ratio,
+                 fi.fiscal_year, fi.fiscal_quarter
+            FROM financial fi
+           WHERE fi.code = c.code
+           ORDER BY fi.fiscal_year DESC, fi.fiscal_quarter DESC
+           LIMIT 1
+      ) AS f ON TRUE
       {lateral_sql}
      WHERE t.is_active = TRUE;
     """
@@ -139,12 +154,36 @@ def load_overview() -> pd.DataFrame:
     df["거래량"] = pd.to_numeric(df["volume"], errors="coerce")
     df.rename(columns={"code": "종목코드", "name": "종목명"}, inplace=True)
 
+    # ── 투자지표 (거래소 제공) ──
+    df["PER"] = pd.to_numeric(df["per"], errors="coerce").round(2)
+    df["PBR"] = pd.to_numeric(df["pbr"], errors="coerce").round(2)
+    df["EPS(원)"] = pd.to_numeric(df["eps"], errors="coerce")
+    df["BPS(원)"] = pd.to_numeric(df["bps"], errors="coerce")
+    df["배당수익률(%)"] = pd.to_numeric(df["div_yield"], errors="coerce").round(2)
+
+    # ── 재무지표 (DART 제공) ──
+    df["ROE(%)"] = pd.to_numeric(df["roe"], errors="coerce").round(2)
+    df["부채비율(%)"] = pd.to_numeric(df["debt_ratio"], errors="coerce").round(2)
+    df["영업이익률(%)"] = pd.to_numeric(df["op_margin"], errors="coerce").round(2)
+    df["배당성향(%)"] = pd.to_numeric(df["payout_ratio"], errors="coerce").round(2)
+
+    # 재무지표가 어느 시점 것인지 함께 표시합니다 (예: 2025년 사업(연간))
+    q_name = {1: "1분기", 2: "반기", 3: "3분기", 4: "연간"}
+    df["재무 기준"] = [
+        f"{int(y)}년 {q_name.get(int(q), q)}" if pd.notna(y) and pd.notna(q) else None
+        for y, q in zip(df["fiscal_year"], df["fiscal_quarter"])
+    ]
+
     # ★ 빈 값이 화면에 'None' 이라는 글자로 찍히지 않게 하는 처리 ★
     # 파이썬의 '숫자 아님(NaN)' 을 그대로 두면 Streamlit 이 None 이라고 적습니다.
     # 아래처럼 '값 없음을 표현할 수 있는 숫자형'으로 바꾸면 깔끔한 빈칸이 됩니다.
-    for col in ["종가", "거래량", "시가총액(억)"]:
+    for col in ["종가", "거래량", "시가총액(억)", "EPS(원)", "BPS(원)"]:
         df[col] = df[col].astype("Float64").round(0).astype("Int64")
-    for col in ["등락률(%)"] + RETURN_COLS:
+    for col in (
+        ["등락률(%)", "PER", "PBR", "배당수익률(%)",
+         "ROE(%)", "부채비율(%)", "영업이익률(%)", "배당성향(%)"]
+        + RETURN_COLS
+    ):
         df[col] = df[col].astype("Float64")
 
     return df
@@ -164,6 +203,41 @@ def load_history(code: str) -> pd.DataFrame:
     if not df.empty:
         df["trade_date"] = pd.to_datetime(df["trade_date"])
         df["close"] = pd.to_numeric(df["close"], errors="coerce")
+    return df
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_financials(code: str) -> pd.DataFrame:
+    """
+    한 종목의 분기별 재무지표를 오래된 것부터 가져옵니다.
+    재무 데이터가 없으면 빈 표를 돌려주며, 화면은 그 부분만 감춥니다.
+    """
+    sql = """
+        SELECT fiscal_year, fiscal_quarter,
+               roe, debt_ratio, op_margin, payout_ratio,
+               revenue, operating_profit, net_income,
+               total_equity, total_liabilities, total_assets
+          FROM financial
+         WHERE code = %(code)s
+         ORDER BY fiscal_year, fiscal_quarter;
+    """
+    try:
+        with get_conn() as conn:
+            df = pd.read_sql(sql, conn, params={"code": code})
+    except Exception:
+        # 재무지표 쪽에 문제가 생겨도 시세 화면은 계속 동작해야 합니다.
+        return pd.DataFrame()
+
+    if df.empty:
+        return df
+
+    q_name = {1: "1분기", 2: "반기", 3: "3분기", 4: "연간"}
+    df["기간"] = [
+        f"{int(y)} {q_name.get(int(q), q)}"
+        for y, q in zip(df["fiscal_year"], df["fiscal_quarter"])
+    ]
+    for c in ["roe", "debt_ratio", "op_margin", "payout_ratio"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
 
@@ -306,10 +380,45 @@ with st.sidebar:
     )
 
     st.divider()
-    sort_options = ["시가총액", "등락률(%)", "거래량", "종가"] + RETURN_COLS
-    sort_by = st.selectbox("정렬 기준", sort_options, index=0)
-    ascending = st.radio("정렬 방향", ["내림차순(큰 값 먼저)", "오름차순"], index=0) \
-        == "오름차순"
+    st.markdown("**재무지표로 걸러내기**")
+    st.caption("DART 전자공시 기준. ETF 는 재무제표가 없어 해당 없음.")
+
+    per_max = st.number_input(
+        "PER 최대 (이하만 보기)", min_value=0.0, value=0.0, step=1.0,
+        help="0 이면 제한 없음. 예: 10 을 넣으면 PER 10 이하인 저평가 종목만.",
+    )
+    roe_min = st.number_input(
+        "ROE 최소 (%, 이상만 보기)", value=0.0, step=1.0,
+        help="0 이면 제한 없음. 예: 15 를 넣으면 ROE 15% 이상인 알짜 회사만.",
+    )
+    debt_max = st.number_input(
+        "부채비율 최대 (%, 이하만 보기)", min_value=0.0, value=0.0, step=10.0,
+        help="0 이면 제한 없음. 예: 100 을 넣으면 빚이 자기 돈보다 적은 회사만.",
+    )
+    only_with_fin = st.checkbox(
+        "재무지표가 있는 종목만 보기", value=False,
+        help="켜면 ETF 와 재무제표가 없는 종목이 목록에서 빠집니다.",
+    )
+
+    st.divider()
+    # 정렬은 '무엇을 크게/작게 볼지'를 이름으로 고르게 합니다.
+    # (컬럼명 + 오름/내림 조합을 매번 고르는 것보다 훨씬 쉽습니다)
+    SORT_PRESETS: dict[str, tuple[str, bool]] = {
+        "시가총액 큰 순": ("시가총액(억)", False),
+        "등락률 높은 순": ("등락률(%)", False),
+        "등락률 낮은 순": ("등락률(%)", True),
+        "거래량 많은 순": ("거래량", False),
+        "PER 낮은 순 (저평가)": ("PER", True),
+        "PBR 낮은 순 (저평가)": ("PBR", True),
+        "배당수익률 높은 순": ("배당수익률(%)", False),
+        "ROE 높은 순 (돈 잘 버는)": ("ROE(%)", False),
+        "부채비율 낮은 순 (안전한)": ("부채비율(%)", True),
+        "영업이익률 높은 순": ("영업이익률(%)", False),
+        **{f"수익률 {p} 높은 순": (f"수익률 {p}(%)", False) for p in PERIODS},
+        **{f"수익률 {p} 낮은 순": (f"수익률 {p}(%)", True) for p in PERIODS},
+    }
+    sort_label = st.selectbox("정렬 기준", list(SORT_PRESETS.keys()), index=0)
+    sort_col, ascending = SORT_PRESETS[sort_label]
 
     st.divider()
     if st.button("🔄 최신 데이터 다시 읽기", width="stretch"):
@@ -352,11 +461,25 @@ if ret_period != "사용 안 함":
     ret = view[col].astype("Float64")
     view = view[(ret >= ret_min) & (ret <= ret_max)]
 
-sort_col = "시가총액(억)" if sort_by == "시가총액" else sort_by
+# ── 재무지표 필터 ──
+# 값이 없는 종목(ETF 등)은 조건을 걸면 자연스럽게 빠집니다.
+if per_max > 0:
+    view = view[view["PER"].astype("Float64").notna() & (view["PER"] <= per_max)]
+if roe_min != 0:
+    view = view[view["ROE(%)"].astype("Float64").notna() & (view["ROE(%)"] >= roe_min)]
+if debt_max > 0:
+    view = view[
+        view["부채비율(%)"].astype("Float64").notna() & (view["부채비율(%)"] <= debt_max)
+    ]
+if only_with_fin:
+    view = view[view["ROE(%)"].notna() | view["부채비율(%)"].notna()]
+
 view = view.sort_values(sort_col, ascending=ascending, na_position="last")
 
 display_cols = (
     ["종목코드", "종목명", "시장", "종류", "종가", "등락률(%)", "거래량", "시가총액(억)"]
+    + ["PER", "PBR", "배당수익률(%)"]
+    + ["ROE(%)", "부채비율(%)", "영업이익률(%)"]
     + RETURN_COLS
 )
 table = view[display_cols].reset_index(drop=True)
@@ -390,6 +513,33 @@ event = st.dataframe(
             help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
         ),
         "등락률(%)": st.column_config.NumberColumn("등락률(%)", format="localized"),
+        "PER": st.column_config.NumberColumn(
+            "PER", format="localized",
+            help="주가수익비율 = 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 쌉니다. "
+                 "적자 기업은 계산이 안 되어 빈칸입니다.",
+        ),
+        "PBR": st.column_config.NumberColumn(
+            "PBR", format="localized",
+            help="주가순자산비율 = 주가 ÷ 주당순자산. 1보다 낮으면 장부가치보다 쌉니다.",
+        ),
+        "배당수익률(%)": st.column_config.NumberColumn(
+            "배당수익률(%)", format="localized",
+            help="1년 배당금 ÷ 주가 × 100. 은행 이자율과 비교해 보세요.",
+        ),
+        "ROE(%)": st.column_config.NumberColumn(
+            "ROE(%)", format="localized",
+            help="자기자본이익률 = 당기순이익 ÷ 자본총계 × 100. "
+                 "높을수록 내 돈으로 돈을 잘 버는 회사입니다. (DART 최신 분기 기준)",
+        ),
+        "부채비율(%)": st.column_config.NumberColumn(
+            "부채비율(%)", format="localized",
+            help="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사입니다. "
+                 "100% 면 자기 돈과 빌린 돈이 같다는 뜻입니다.",
+        ),
+        "영업이익률(%)": st.column_config.NumberColumn(
+            "영업이익률(%)", format="localized",
+            help="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사입니다.",
+        ),
         **{
             c: st.column_config.NumberColumn(c, format="localized")
             for c in RETURN_COLS
@@ -528,7 +678,109 @@ else:
             "수집이 끝나면 정상적으로 그려집니다."
         )
 
-with st.expander("원본 데이터 보기 (최근 60일)"):
+# ── 재무지표 (DART 전자공시) ──────────────────────────────────
+# 이 부분은 시세와 완전히 분리되어 있습니다.
+# 재무 데이터가 없거나 문제가 생겨도 위쪽 차트는 정상 동작합니다.
+st.divider()
+st.subheader("🏦 재무지표")
+
+fin = load_financials(code)
+
+if fin.empty:
+    st.info(
+        "이 종목은 재무지표가 없습니다.\n\n"
+        "ETF·리츠 등은 재무제표를 내지 않거나, 아직 수집되지 않았을 수 있습니다. "
+        "수집은 `python -m src.financial_collect` 로 실행합니다."
+    )
+else:
+    latest = fin.iloc[-1]
+    st.caption(f"가장 최근 기준: **{latest['기간']}** · 출처: DART 전자공시")
+
+    m1, m2, m3, m4 = st.columns(4)
+
+    def _show(col, label, value, suffix="%", help_text=None):
+        if pd.isna(value):
+            col.metric(label, "—", help=help_text)
+        else:
+            col.metric(label, f"{float(value):,.2f}{suffix}", help=help_text)
+
+    _show(m1, "ROE", latest["roe"],
+          help_text="당기순이익 ÷ 자본총계 × 100. 높을수록 돈을 잘 버는 회사")
+    _show(m2, "부채비율", latest["debt_ratio"],
+          help_text="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사")
+    _show(m3, "영업이익률", latest["op_margin"],
+          help_text="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사")
+    _show(m4, "배당성향", latest["payout_ratio"],
+          help_text="현금배당금총액 ÷ 당기순이익 × 100. 연간 보고서에만 있습니다")
+
+    # 분기별 추이 차트
+    metric_choice = st.radio(
+        "추이로 볼 지표",
+        ["ROE", "부채비율", "영업이익률", "배당성향"],
+        index=0,
+        horizontal=True,
+    )
+    col_map = {
+        "ROE": ("roe", "#d92d20"),
+        "부채비율": ("debt_ratio", "#7839ee"),
+        "영업이익률": ("op_margin", "#0e9384"),
+        "배당성향": ("payout_ratio", "#dc6803"),
+    }
+    col_name, color = col_map[metric_choice]
+    series = fin[["기간", col_name]].dropna()
+
+    if series.empty:
+        st.info(f"{metric_choice} 데이터가 아직 없습니다.")
+    else:
+        fig_fin = go.Figure(
+            go.Bar(
+                x=series["기간"],
+                y=series[col_name],
+                marker=dict(color=color),
+                hovertemplate="%{x}<br>" + metric_choice + " %{y:,.2f}%<extra></extra>",
+            )
+        )
+        fig_fin.update_yaxes(title_text=f"{metric_choice} (%)", tickformat=",.1f")
+        fig_fin.update_layout(
+            height=320,
+            margin=dict(l=10, r=10, t=30, b=10),
+            showlegend=False,
+            title=dict(text=f"분기별 {metric_choice} 추이", font=dict(size=14)),
+        )
+        st.plotly_chart(fig_fin, width="stretch")
+
+    st.caption(
+        "⚠️ 분기 보고서는 그 기간만의 실적이라 연간(사업보고서)보다 값이 작게 나옵니다. "
+        "같은 분기끼리(작년 3분기 vs 올해 3분기) 비교하시는 게 맞습니다."
+    )
+
+    with st.expander("재무제표 원본 금액 보기"):
+        raw = fin.copy()
+        for c, label in [
+            ("revenue", "매출액(억원)"),
+            ("operating_profit", "영업이익(억원)"),
+            ("net_income", "당기순이익(억원)"),
+            ("total_equity", "자본총계(억원)"),
+            ("total_liabilities", "부채총계(억원)"),
+            ("total_assets", "자산총계(억원)"),
+        ]:
+            raw[label] = (
+                pd.to_numeric(raw[c], errors="coerce") / 100_000_000
+            ).round(0).astype("Float64").astype("Int64")
+        show_cols = ["기간", "매출액(억원)", "영업이익(억원)", "당기순이익(억원)",
+                     "자본총계(억원)", "부채총계(억원)", "자산총계(억원)"]
+        st.dataframe(
+            raw[show_cols].iloc[::-1],
+            width="stretch",
+            hide_index=True,
+            column_config={
+                c: st.column_config.NumberColumn(format="localized")
+                for c in show_cols[1:]
+            },
+        )
+
+st.divider()
+with st.expander("시세 원본 데이터 보기 (최근 60일)"):
     recent = hist.sort_values("trade_date", ascending=False).head(60).copy()
     recent["날짜"] = recent["trade_date"].dt.strftime("%Y-%m-%d")
     recent["종가(원)"] = pd.to_numeric(recent["close"], errors="coerce").astype("Int64")

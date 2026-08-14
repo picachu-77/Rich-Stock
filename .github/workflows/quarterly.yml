@@ -1,0 +1,110 @@
+# =============================================================
+#  분기마다 DART 재무지표를 자동으로 수집합니다.
+# =============================================================
+#  ★ 실행 전 준비 (깃허브 웹사이트에서 한 번만) ★
+#    저장소 > Settings > Secrets and variables > Actions >
+#    [New repository secret] 로 아래를 등록하세요.
+#
+#      이름(Name)        값(Secret)
+#      ---------------   ------------------------------------
+#      DATABASE_URL      Neon 연결 문자열  (이미 등록하셨습니다)
+#      DART_API_KEY      DART 오픈API 40자리 인증키  ← 새로 필요
+#
+#    ※ KRX_ID / KRX_PW 는 여기서 쓰지 않습니다.
+#      재무지표는 거래소가 아니라 DART 에서 받기 때문입니다.
+#
+#  ★ 왜 분기마다인가 ★
+#    재무제표는 3개월에 한 번만 새로 나옵니다.
+#    매일 받아봐야 같은 값이라 의미가 없고 DART 호출만 낭비됩니다.
+# =============================================================
+
+name: 분기별 재무지표 수집
+
+on:
+  schedule:
+    # 공시 마감 직후를 노려 2·5·8·11월 15일 새벽 3시(한국시간)에 실행합니다.
+    #   1분기  → 5월 중순 마감
+    #   반기    → 8월 중순 마감
+    #   3분기  → 11월 중순 마감
+    #   사업보고서 → 이듬해 3월 말 마감
+    # cron 은 세계표준시(UTC)라 한국시간 03:00 = 전날 18:00 UTC
+    - cron: "0 18 14 2,5,8,11 *"
+
+  # 깃허브 화면에서 직접 돌릴 수도 있게 합니다.
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "수집 범위"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest      # 가장 최근 분기 하나만 (평소 자동 실행)
+          - years3      # 최근 3년치 전체 (처음 채울 때)
+      with_dividend:
+        description: "배당성향도 수집 (느림: 호출 약 8,000건)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: quarterly-financial
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: 재무지표 수집
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: 코드 내려받기
+        uses: actions/checkout@v5
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 부품(라이브러리) 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 신규 상장 회사가 생겼을 수 있으니 회사코드 대응표를 먼저 갱신합니다.
+      # (DART 호출 1건이면 끝납니다)
+      - name: DART 회사코드 대응표 갱신
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+        run: python -m src.dart_corpcode
+
+      - name: 재무지표 수집
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          TZ: Asia/Seoul
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          DIV_FLAG="--skip-dividend"
+          if [ "${{ github.event.inputs.with_dividend }}" = "true" ]; then
+            DIV_FLAG=""
+          fi
+
+          if [ "$MODE" = "years3" ]; then
+            python -m src.financial_collect --years 3 $DIV_FLAG
+          else
+            python -m src.financial_collect --latest $DIV_FLAG
+          fi
+
+      - name: 실패 시 안내
+        if: failure()
+        run: |
+          echo "::error::재무지표 수집에 실패했습니다."
+          echo "확인할 점:"
+          echo " 1) Settings > Secrets 에 DART_API_KEY 가 등록되어 있는지"
+          echo " 2) DART 하루 호출 한도(20,000건)를 넘지 않았는지"
+          echo " 3) Neon 프로젝트가 살아 있는지"
+          echo ""
+          echo "참고: 이 작업이 실패해도 매일 시세 수집과 화면은 정상 동작합니다."
