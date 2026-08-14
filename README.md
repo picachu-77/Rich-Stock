@@ -178,7 +178,53 @@ py -m venv .venv
 
 ---
 
-## 7. 알아두실 점
+## 7. 화면을 인터넷에 올리기 (Streamlit Community Cloud · 무료)
+
+내 컴퓨터가 꺼져 있어도 휴대폰으로 볼 수 있게 됩니다.
+
+### 준비물
+GitHub 계정만 있으면 됩니다. 코드는 이미 올라가 있어야 합니다.
+
+### 순서
+
+1. https://share.streamlit.io 접속 → **Continue with GitHub** 으로 로그인
+2. **Create app** → **Deploy a public app from GitHub** 선택
+3. 아래처럼 채웁니다
+
+   | 칸 | 값 |
+   |---|---|
+   | Repository | `picachu-77/Rich-Stock` |
+   | Branch | `main` |
+   | Main file path | `app.py` |
+
+4. **Advanced settings** 를 펼치고 **Secrets** 칸에 아래 한 줄을 넣습니다.
+   (`.env` 의 DATABASE_URL 값을 **따옴표로 감싸서** 붙여넣으세요)
+
+   ```toml
+   DATABASE_URL = "postgresql://...여기에 Neon 연결 문자열..."
+   ```
+
+   > `.env` 와 달리 여기서는 **따옴표가 필요합니다.** 형식이 다릅니다(TOML).
+   > 거래소 아이디·비밀번호는 넣지 마세요. 화면은 거래소에 접속하지 않습니다.
+
+5. **Deploy** 클릭 → 3~5분 기다리면 주소가 나옵니다
+
+### ⚠️ 공개 범위 주의
+
+Streamlit Community Cloud 의 앱은 **기본이 전체 공개**입니다.
+주소를 아는 사람은 누구나 볼 수 있습니다.
+
+나만 보려면 배포 후:
+**앱 화면 우측 하단 Manage app → Settings → Sharing** 에서
+공개 범위를 제한하고, 볼 사람의 이메일을 직접 등록하세요.
+
+### 알아둘 점
+- 무료 플랜은 **아무도 안 보면 앱이 잠듭니다.** 다시 열면 30초쯤 뒤 깨어납니다.
+- 코드를 깃허브에 새로 올리면 앱이 자동으로 갱신됩니다.
+
+---
+
+## 8. 알아두실 점
 
 **ETF 는 시가총액이 빈칸입니다.**
 한국거래소가 ETF 스냅샷으로 주는 항목은 `NAV, 시가, 고가, 저가, 종가, 거래량,
@@ -197,7 +243,7 @@ Streamlit 이 업데이트되어 일부가 다시 영어로 보이면, 그 파�
 
 ---
 
-## 8. 문제가 생겼을 때
+## 9. 문제가 생겼을 때
 
 가장 먼저:
 
