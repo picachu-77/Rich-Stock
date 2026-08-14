@@ -43,11 +43,13 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # v4/v5 는 내부적으로 Node.js 20 을 쓰는데 지원이 끝나가서
+      # 더 최신 버전으로 올렸습니다. (하는 일은 똑같습니다)
       - name: 코드 내려받기
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 파이썬 준비
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "pip"
