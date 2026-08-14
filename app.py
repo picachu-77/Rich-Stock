@@ -226,10 +226,9 @@ if not meta["price_rows"]:
     )
     st.stop()
 
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 c1.metric("등록 종목", f"{meta['ticker_active']:,}개")
-c2.metric("보유 시세", f"{meta['price_rows']:,}건")
-c3.metric("최신 기준일", str(meta["last_date"]))
+c2.metric("최신 기준일", str(meta["last_date"]))
 
 df = load_overview()
 if df.empty:
