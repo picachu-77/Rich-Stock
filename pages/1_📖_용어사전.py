@@ -133,27 +133,27 @@ st.info(
 
 st.caption(
     f"모두 {len(TERMS)}개 용어 · 각 용어는 **한 줄 뜻 → 자세한 설명 → 숫자 예시 → "
-    "유튜브 영상 찾기** 순서로 되어 있습니다. 용어 제목을 클릭하면 펼쳐집니다."
+    "유튜브 영상 찾기** 순서로 되어 있습니다. 용어 제목을 누르면 펼쳐집니다."
 )
 
-# ── 검색 · 분류 고르기 ────────────────────────────────────────
-c1, c2 = st.columns([2, 3])
+# ── 검색 ─────────────────────────────────────────────────────
+keyword = st.text_input(
+    "🔎 용어 검색",
+    placeholder="예: PER, 배당, 손절",
+    help="용어 이름뿐 아니라 설명 속 단어로도 찾을 수 있습니다. "
+         "여러 단어를 띄어쓰기로 넣으면 모두 포함된 용어만 나옵니다.",
+)
 
-with c1:
-    keyword = st.text_input(
-        "🔎 용어 검색",
-        placeholder="예: PER, 배당, 손절",
-        help="용어 이름뿐 아니라 설명 속 단어로도 찾을 수 있습니다. "
-             "여러 단어를 띄어쓰기로 넣으면 모두 포함된 용어만 나옵니다.",
-    )
-
-with c2:
-    chosen = st.multiselect(
-        "📂 분류 고르기 (비워두면 전체)",
-        CATEGORY_ORDER,
-        default=[],
-        help="보고 싶은 분류만 골라서 볼 수 있습니다.",
-    )
+# ── 분류 바로가기 ────────────────────────────────────────────
+# 46개를 한 줄로 늘어놓으면 휴대폰에서 8화면쯤 스크롤해야 합니다.
+# 분류를 하나 고르면 그 분류만 보여줘서 한 화면에 들어오게 합니다.
+picked = st.radio(
+    "📂 분류 바로가기",
+    ["전체"] + CATEGORY_ORDER,
+    index=0,
+    horizontal=True,
+    help="보고 싶은 분류를 누르면 그 분류만 보입니다.",
+)
 
 open_all = st.toggle(
     "모든 용어 펼쳐 보기",
@@ -165,8 +165,9 @@ words = [w.lower() for w in keyword.split() if w.strip()]
 searching = bool(words)
 
 hits = [t for t in TERMS if (not words or matches(t, words))]
-if chosen:
-    hits = [t for t in hits if t["category"] in chosen]
+# 검색 중에는 분류 제한을 풀어서, 다른 분류에 있는 용어도 찾을 수 있게 합니다.
+if picked != "전체" and not searching:
+    hits = [t for t in hits if t["category"] == picked]
 
 st.divider()
 

@@ -22,7 +22,7 @@ import streamlit as st
 
 from src.db import get_conn
 from src.ui_korean import apply_korean_ui
-from src.ui_style import apply_style
+from src.ui_style import apply_style, mobile_sidebar_button
 
 # pandas 가 psycopg2 연결을 쓸 때 내는 안내 경고를 숨깁니다.
 # (동작에는 문제가 없고, 화면에 노란 경고만 뜨는 것을 막기 위한 것입니다)
@@ -47,6 +47,9 @@ apply_style()
 
 # Streamlit 이 영어로 그리는 표 메뉴 등을 한글로 바꿉니다.
 apply_korean_ui()
+
+# 휴대폰에서 화면 아래에 '☰ 필터' 버튼을 띄웁니다.
+mobile_sidebar_button()
 
 PERIODS = {
     "1개월": "1 month",
@@ -240,6 +243,71 @@ def load_meta() -> dict:
         return summary(conn)
 
 
+def _num(value, unit: str = "", digits: int = 0) -> str:
+    """숫자를 화면에 보기 좋게 바꿉니다. 값이 없으면 '—' 로 표시합니다."""
+    if pd.isna(value):
+        return "—"
+    return f"{float(value):,.{digits}f}{unit}"
+
+
+def make_stock_cards(table: pd.DataFrame, limit: int = 40) -> str:
+    """
+    휴대폰용 '종목 카드' 목록을 만듭니다.
+
+    왜 필요한가요?
+      표는 열이 18개라서 휴대폰에서 옆으로 계속 밀어야 하고,
+      밀다 보면 종목명이 화면에서 사라져 어느 줄인지 알 수 없게 됩니다.
+      카드 한 장에 중요한 정보만 담으면 옆으로 밀 필요가 없어집니다.
+    """
+    cards = []
+    for _, r in table.head(limit).iterrows():
+        chg = r["등락률(%)"]
+        cls = "" if pd.isna(chg) else ("up" if float(chg) >= 0 else "down")
+        chg_txt = "—" if pd.isna(chg) else f"{float(chg):+.2f}%"
+
+        ret1y = r.get("수익률 1년(%)")
+        ret_cls = "" if pd.isna(ret1y) else ("up" if float(ret1y) >= 0 else "down")
+        ret_txt = "—" if pd.isna(ret1y) else f"{float(ret1y):+.1f}%"
+
+        cards.append(
+            f"""
+            <div class="stock-card">
+              <div class="sc-top">
+                <div><span class="sc-name">{r['종목명']}</span>
+                     <span class="sc-code">{r['종목코드']}</span></div>
+                <div style="text-align:right">
+                  <div class="sc-price">{_num(r['종가'], '원')}</div>
+                  <div class="sc-chg {cls}">{chg_txt}</div>
+                </div>
+              </div>
+              <div class="sc-tags">
+                <span class="sc-tag">{r['시장']}</span>
+                <span class="sc-tag">{r['종류']}</span>
+                <span class="sc-tag">시총 {_num(r['시가총액(억)'], '억')}</span>
+              </div>
+              <div class="sc-grid">
+                <div>PER <b>{_num(r['PER'], '', 2)}</b></div>
+                <div>PBR <b>{_num(r['PBR'], '', 2)}</b></div>
+                <div>ROE <b>{_num(r['ROE(%)'], '%', 1)}</b></div>
+                <div>배당 <b>{_num(r['배당수익률(%)'], '%', 2)}</b></div>
+                <div>부채비율 <b>{_num(r['부채비율(%)'], '%', 0)}</b></div>
+                <div>1년 수익률 <b class="{ret_cls}">{ret_txt}</b></div>
+              </div>
+            </div>
+            """
+        )
+    return "".join(cards)
+
+
+def color_updown(value) -> str:
+    """표에서 오른 숫자는 빨강, 내린 숫자는 파랑으로 칠합니다 (국내 증시 관행)."""
+    if pd.isna(value):
+        return ""
+    return "color:#d92d20;font-weight:600" if float(value) > 0 else (
+        "color:#1570ef;font-weight:600" if float(value) < 0 else ""
+    )
+
+
 def calc_period_returns(hist: pd.DataFrame) -> dict[str, float | None]:
     """
     쌓여 있는 과거 종가로 기간별 수익률을 직접 계산합니다.
@@ -268,11 +336,17 @@ def calc_period_returns(hist: pd.DataFrame) -> dict[str, float | None]:
 
 # ── 본문 ─────────────────────────────────────────────────────
 st.title("📈 국내주식 대시보드")
-st.caption(
-    "왼쪽 **검색 · 필터**에서 조건을 걸어 종목을 찾고, 표에서 종목을 고르면 "
-    "차트와 재무지표가 나타납니다.  "
-    "📱 휴대폰에서는 화면 왼쪽 위 **`≫`** 를 누르면 필터가 열립니다."
-)
+
+# 첫 화면이 설명글로 꽉 차지 않도록, 자세한 사용법은 접어둡니다.
+with st.expander("ⓘ 사용법 (처음이신가요?)", expanded=False):
+    st.markdown(
+        "1. **필터**로 원하는 조건을 겁니다. "
+        "컴퓨터는 화면 왼쪽, 휴대폰은 화면 아래 **`☰ 필터`** 버튼을 누르세요.\n"
+        "2. **📋 종목 목록** 탭에서 종목을 고릅니다. "
+        "(컴퓨터는 표에서 클릭, 휴대폰은 목록 아래 **종목 선택**에서 고르기)\n"
+        "3. **📊 차트** 탭에서 주가 흐름을, **🏦 재무** 탭에서 회사 상태를 봅니다.\n\n"
+        "숫자 용어가 어렵다면 왼쪽 메뉴의 **📖 용어사전**을 참고하세요."
+    )
 
 try:
     meta = load_meta()
@@ -509,329 +583,369 @@ display_cols = (
 )
 table = view[display_cols].reset_index(drop=True)
 
-st.subheader(f"종목 목록  ({len(table):,}개)")
-st.caption(
-    "표 왼쪽 끝의 네모(☐)를 누르거나, 표 아래의 **종목 선택**에서 고르면 "
-    "차트와 기간별 수익률이 나타납니다. "
-    "열 제목을 누르면 그 열 기준으로 정렬됩니다. "
-    "📱 휴대폰에서는 표를 **옆으로 밀어** 나머지 항목(PER·ROE·수익률 등)을 볼 수 있습니다."
-)
-
 if table.empty:
     st.warning("조건에 맞는 종목이 없습니다. 왼쪽 필터를 조금 넓혀 보세요.")
     st.stop()
 
-event = st.dataframe(
-    table,
-    width="stretch",
-    hide_index=True,
-    height=430,
-    on_select="rerun",
-    selection_mode="single-row",
-    column_config={
-        "종목코드": st.column_config.TextColumn("종목코드", width="small"),
-        "종목명": st.column_config.TextColumn("종목명", width="medium"),
-        "종가": st.column_config.NumberColumn("종가(원)", format="localized"),
-        "거래량": st.column_config.NumberColumn("거래량(주)", format="localized"),
-        "시가총액(억)": st.column_config.NumberColumn(
-            "시가총액(억원)",
-            format="localized",
-            help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
-        ),
-        "등락률(%)": st.column_config.NumberColumn("등락률(%)", format="localized"),
-        "PER": st.column_config.NumberColumn(
-            "PER", format="localized",
-            help="주가수익비율 = 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 쌉니다. "
-                 "적자 기업은 계산이 안 되어 빈칸입니다.",
-        ),
-        "PBR": st.column_config.NumberColumn(
-            "PBR", format="localized",
-            help="주가순자산비율 = 주가 ÷ 주당순자산. 1보다 낮으면 장부가치보다 쌉니다.",
-        ),
-        "배당수익률(%)": st.column_config.NumberColumn(
-            "배당수익률(%)", format="localized",
-            help="1년 배당금 ÷ 주가 × 100. 은행 이자율과 비교해 보세요.",
-        ),
-        "ROE(%)": st.column_config.NumberColumn(
-            "ROE(%)", format="localized",
-            help="자기자본이익률 = 당기순이익 ÷ 자본총계 × 100. "
-                 "높을수록 내 돈으로 돈을 잘 버는 회사입니다. (DART 최신 분기 기준)",
-        ),
-        "부채비율(%)": st.column_config.NumberColumn(
-            "부채비율(%)", format="localized",
-            help="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사입니다. "
-                 "100% 면 자기 돈과 빌린 돈이 같다는 뜻입니다.",
-        ),
-        "영업이익률(%)": st.column_config.NumberColumn(
-            "영업이익률(%)", format="localized",
-            help="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사입니다.",
-        ),
-        **{
-            c: st.column_config.NumberColumn(c, format="localized")
-            for c in RETURN_COLS
-        },
-    },
-)
+# ── 화면을 세 칸(탭)으로 나눕니다 ─────────────────────────────
+# 예전에는 목록·차트·재무가 위아래로 길게 이어져서 휴대폰에서 한참 스크롤해야
+# 했습니다. 탭으로 나누면 한 번 눌러 바로 이동할 수 있습니다.
+tab_list, tab_chart, tab_fin = st.tabs(["📋 종목 목록", "📊 차트", "🏦 재무"])
 
-# ── 어떤 종목을 볼지 정하기 ───────────────────────────────────
-# 방법 두 가지를 모두 지원합니다.
-#   (1) 위 표에서 줄을 클릭   (2) 아래 '종목 선택' 목록에서 고르기
-selected_rows = event.selection.rows if event and event.selection else []
+with tab_list:
+    st.subheader(f"종목 목록  ({len(table):,}개)")
 
-clicked_code = table.iloc[selected_rows[0]]["종목코드"] if selected_rows else None
+    # '종목 선택' 칸의 자리를 목록 위에 미리 잡아둡니다.
+    # (휴대폰에서 카드 40장을 지나 맨 아래까지 내려가지 않아도 되도록,
+    #  내용은 나중에 채우고 위치만 여기로 정해두는 방식입니다)
+    sel_slot = st.container()
 
-# 표 클릭은 '방금 새로 클릭했을 때만' 반영합니다.
-# (이렇게 하지 않으면 아래 선택창으로 바꿔도 표 클릭이 계속 덮어씁니다)
-if clicked_code and clicked_code != st.session_state.get("_last_clicked"):
-    st.session_state["_last_clicked"] = clicked_code
-    st.session_state["sel_code"] = clicked_code
+    # ── 휴대폰: 카드 목록 (옆으로 밀 필요 없음) ──
+    # st.container(key="only_mobile") 안에 넣으면 휴대폰에서만 보입니다. → src/ui_style.py
+    with st.container(key="only_mobile"):
+        st.markdown(make_stock_cards(table), unsafe_allow_html=True)
+        if len(table) > 40:
+            st.caption(
+                f"조건에 맞는 {len(table):,}개 중 앞의 40개만 카드로 보여줍니다. "
+                "왼쪽 필터로 범위를 좁히거나 정렬 기준을 바꿔 보세요."
+            )
 
-st.divider()
-st.subheader("📊 종목 상세")
+    # ── 컴퓨터: 지금까지의 표 그대로 ──
+    with st.container(key="only_desktop"):
+        st.caption(
+            "표 왼쪽 끝의 네모(☐)를 누르거나, 표 아래의 **종목 선택**에서 고르면 "
+            "차트와 재무 탭에 그 종목이 나타납니다. "
+            "열 제목을 누르면 그 열 기준으로 정렬됩니다."
+        )
+        event = st.dataframe(
+            # 오른 값은 빨강, 내린 값은 파랑으로 칠해 한눈에 보이게 합니다.
+            table.style.map(color_updown, subset=["등락률(%)"] + RETURN_COLS),
+            width="stretch",
+            hide_index=True,
+            height=400,
+            on_select="rerun",
+            selection_mode="single-row",
+            column_config={
+                "종목코드": st.column_config.TextColumn("종목코드", width="small"),
+                "종목명": st.column_config.TextColumn("종목명", width="medium"),
+                "종가": st.column_config.NumberColumn("종가(원)", format="localized"),
+                "거래량": st.column_config.NumberColumn("거래량(주)", format="localized"),
+                "시가총액(억)": st.column_config.NumberColumn(
+                    "시가총액(억원)",
+                    format="localized",
+                    help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
+                ),
+                "등락률(%)": st.column_config.NumberColumn("등락률(%)", format="localized"),
+                "PER": st.column_config.NumberColumn(
+                    "PER", format="localized",
+                    help="주가수익비율 = 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 쌉니다. "
+                         "적자 기업은 계산이 안 되어 빈칸입니다.",
+                ),
+                "PBR": st.column_config.NumberColumn(
+                    "PBR", format="localized",
+                    help="주가순자산비율 = 주가 ÷ 주당순자산. 1보다 낮으면 장부가치보다 쌉니다.",
+                ),
+                "배당수익률(%)": st.column_config.NumberColumn(
+                    "배당수익률(%)", format="localized",
+                    help="1년 배당금 ÷ 주가 × 100. 은행 이자율과 비교해 보세요.",
+                ),
+                "ROE(%)": st.column_config.NumberColumn(
+                    "ROE(%)", format="localized",
+                    help="자기자본이익률 = 당기순이익 ÷ 자본총계 × 100. "
+                         "높을수록 내 돈으로 돈을 잘 버는 회사입니다. (DART 최신 분기 기준)",
+                ),
+                "부채비율(%)": st.column_config.NumberColumn(
+                    "부채비율(%)", format="localized",
+                    help="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사입니다. "
+                         "100% 면 자기 돈과 빌린 돈이 같다는 뜻입니다.",
+                ),
+                "영업이익률(%)": st.column_config.NumberColumn(
+                    "영업이익률(%)", format="localized",
+                    help="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사입니다.",
+                ),
+                **{
+                    c: st.column_config.NumberColumn(c, format="localized")
+                    for c in RETURN_COLS
+                },
+            },
+        )
 
-codes = table["종목코드"].tolist()
-name_of = dict(zip(table["종목코드"], table["종목명"]))
+    # ── 어떤 종목을 볼지 정하기 ───────────────────────────────
+    # 방법 두 가지를 모두 지원합니다.
+    #   (1) 표에서 줄을 클릭(컴퓨터)   (2) 아래 '종목 선택' 목록에서 고르기
+    selected_rows = event.selection.rows if event and event.selection else []
+    clicked_code = table.iloc[selected_rows[0]]["종목코드"] if selected_rows else None
 
-current = st.session_state.get("sel_code")
-default_idx = codes.index(current) if current in codes else 0
+    # 표 클릭은 '방금 새로 클릭했을 때만' 반영합니다.
+    # (이렇게 하지 않으면 아래 선택창으로 바꿔도 표 클릭이 계속 덮어씁니다)
+    if clicked_code and clicked_code != st.session_state.get("_last_clicked"):
+        st.session_state["_last_clicked"] = clicked_code
+        st.session_state["sel_code"] = clicked_code
 
-code = st.selectbox(
-    "종목 선택",
-    codes,
-    index=default_idx,
-    format_func=lambda c: f"{name_of.get(c, c)}  ({c})",
-    help="이름 일부를 입력하면 바로 찾을 수 있습니다.",
-)
-st.session_state["sel_code"] = code
+    codes = table["종목코드"].tolist()
+    name_of = dict(zip(table["종목코드"], table["종목명"]))
+
+    current = st.session_state.get("sel_code")
+    default_idx = codes.index(current) if current in codes else 0
+
+    # 위에서 자리를 잡아둔 곳(sel_slot)에 선택 칸을 채워 넣습니다.
+    with sel_slot:
+        code = st.selectbox(
+            "🔎 종목 선택 — 고른 종목이 📊 차트 · 🏦 재무 탭에 나타납니다",
+            codes,
+            index=default_idx,
+            format_func=lambda c: f"{name_of.get(c, c)}  ({c})",
+            help="이름 일부를 입력하면 바로 찾을 수 있습니다.",
+        )
+    st.session_state["sel_code"] = code
 
 row = table[table["종목코드"] == code].iloc[0]
 name = row["종목명"]
 
-headline = f"### {name}  `{code}`"
+# 고른 종목이 무엇인지 탭마다 위에 다시 보여줍니다 (탭을 옮겨도 헷갈리지 않게).
 detail_bits = [str(row["시장"]), str(row["종류"])]
 if pd.notna(row["종가"]):
     detail_bits.append(f"종가 {int(row['종가']):,}원")
 if pd.notna(row["등락률(%)"]):
     detail_bits.append(f"등락률 {float(row['등락률(%)']):+.2f}%")
-st.markdown(headline + "\n\n" + "  ·  ".join(detail_bits))
+headline = f"### {name}  `{code}`\n\n" + "  ·  ".join(detail_bits)
 
 hist = load_history(code)
-if hist.empty:
-    st.warning("이 종목의 과거 시세가 아직 없습니다.")
-    st.stop()
 
-# 기간별 수익률 — 데이터베이스에 쌓인 종가로 직접 계산
-returns = calc_period_returns(hist)
-cols = st.columns(len(PERIODS))
-for col, (label, value) in zip(cols, returns.items()):
-    if value is None:
-        col.metric(label, "—", help="해당 기간만큼의 과거 데이터가 아직 없습니다")
-    else:
-        col.metric(label, f"{value:+.2f}%")
+# ── 차트 탭 ──────────────────────────────────────────────────
+with tab_chart:
+    st.markdown(headline)
 
-# ── 차트 ─────────────────────────────────────────────────────
-range_label = st.radio(
-    "차트 기간",
-    ["1개월", "3개월", "6개월", "1년", "3년", "전체"],
-    index=3,
-    horizontal=True,
-)
+    if hist.empty:
+        st.warning("이 종목의 과거 시세가 아직 없습니다.")
+        st.stop()
 
-months_map = {"1개월": 1, "3개월": 3, "6개월": 6, "1년": 12, "3년": 36}
-plot_df = hist
-if range_label in months_map:
-    cutoff = hist["trade_date"].max() - pd.DateOffset(months=months_map[range_label])
-    plot_df = hist[hist["trade_date"] >= cutoff]
-
-if plot_df.empty:
-    st.info("이 기간에는 아직 데이터가 없습니다. 더 긴 기간을 골라 보세요.")
-else:
-    first_close = float(plot_df["close"].iloc[0])
-    last_close = float(plot_df["close"].iloc[-1])
-    period_ret = (last_close / first_close - 1) * 100 if first_close else 0.0
-    # 오르면 빨강, 내리면 파랑 (국내 증시 표기 관행)
-    line_color = "#d92d20" if period_ret >= 0 else "#1570ef"
-
-    # 점이 몇 개 없으면 선이 안 보이므로 점도 함께 찍습니다.
-    mode = "lines+markers" if len(plot_df) <= 40 else "lines"
-
-    fig = go.Figure(
-        go.Scatter(
-            x=plot_df["trade_date"],
-            y=plot_df["close"],
-            mode=mode,
-            line=dict(width=2, color=line_color),
-            marker=dict(size=6, color=line_color),
-            hovertemplate="%{x|%Y-%m-%d}<br>종가 %{y:,.0f}원<extra></extra>",
-        )
-    )
-
-    # 세로축은 0 부터가 아니라 실제 주가 범위에 맞춥니다 (변동이 잘 보이도록).
-    lo, hi = float(plot_df["close"].min()), float(plot_df["close"].max())
-    pad = max((hi - lo) * 0.10, max(hi * 0.02, 1))
-
-    fig.update_yaxes(
-        title_text="주가 (원)",
-        tickformat=",.0f",
-        range=[max(lo - pad, 0), hi + pad],
-    )
-    # 가로축은 날짜만 표시 (데이터가 적을 때 시:분:초가 뜨는 것을 막습니다)
-    fig.update_xaxes(title_text=None, tickformat="%Y-%m-%d", hoverformat="%Y-%m-%d")
-    fig.update_layout(
-        height=430,
-        margin=dict(l=10, r=10, t=46, b=10),
-        hovermode="x unified",
-        showlegend=False,
-        title=dict(
-            # 위쪽 '기간별 수익률' 과 헷갈리지 않게 표현을 구분합니다.
-            # 이것은 '차트에 그려진 구간의 처음 → 끝' 변동입니다.
-            text=(
-                f"차트 구간 변동  {period_ret:+.2f}%　"
-                f"({plot_df['trade_date'].min():%Y-%m-%d} ~ "
-                f"{plot_df['trade_date'].max():%Y-%m-%d}, 거래일 {len(plot_df)}일)"
-            ),
-            font=dict(size=14),
-        ),
-    )
-
-    st.plotly_chart(fig, width="stretch")
-
-    # 데이터가 너무 적으면 왜 그런지 알려줍니다.
-    if len(plot_df) < 5:
-        st.warning(
-            f"이 기간에 저장된 거래일이 {len(plot_df)}일뿐이라 그래프가 거의 "
-            "비어 보입니다. 과거 데이터 수집이 아직 진행 중이기 때문입니다. "
-            "수집이 끝나면 정상적으로 그려집니다."
-        )
-
-# ── 재무지표 (DART 전자공시) ──────────────────────────────────
-# 이 부분은 시세와 완전히 분리되어 있습니다.
-# 재무 데이터가 없거나 문제가 생겨도 위쪽 차트는 정상 동작합니다.
-st.divider()
-st.subheader("🏦 재무지표")
-
-fin = load_financials(code)
-
-if fin.empty:
-    st.info(
-        "이 종목은 재무지표가 없습니다.\n\n"
-        "ETF·리츠 등은 재무제표를 내지 않거나, 아직 수집되지 않았을 수 있습니다. "
-        "수집은 `python -m src.financial_collect` 로 실행합니다."
-    )
-else:
-    latest = fin.iloc[-1]
-    st.caption(f"가장 최근 기준: **{latest['기간']}** · 출처: DART 전자공시")
-
-    m1, m2, m3, m4 = st.columns(4)
-
-    def _show(col, label, value, suffix="%", help_text=None):
-        if pd.isna(value):
-            col.metric(label, "—", help=help_text)
+    # 기간별 수익률 — 데이터베이스에 쌓인 종가로 직접 계산
+    returns = calc_period_returns(hist)
+    cols = st.columns(len(PERIODS))
+    for col, (label, value) in zip(cols, returns.items()):
+        if value is None:
+            col.metric(label, "—", help="해당 기간만큼의 과거 데이터가 아직 없습니다")
         else:
-            col.metric(label, f"{float(value):,.2f}{suffix}", help=help_text)
+            col.metric(label, f"{value:+.2f}%")
 
-    _show(m1, "ROE", latest["roe"],
-          help_text="당기순이익 ÷ 자본총계 × 100. 높을수록 돈을 잘 버는 회사")
-    _show(m2, "부채비율", latest["debt_ratio"],
-          help_text="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사")
-    _show(m3, "영업이익률", latest["op_margin"],
-          help_text="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사")
-    _show(m4, "배당성향", latest["payout_ratio"],
-          help_text="현금배당금총액 ÷ 당기순이익 × 100. 연간 보고서에만 있습니다")
-
-    # 분기별 추이 차트
-    metric_choice = st.radio(
-        "추이로 볼 지표",
-        ["ROE", "부채비율", "영업이익률", "배당성향"],
-        index=0,
+    range_label = st.radio(
+        "차트 기간",
+        ["1개월", "3개월", "6개월", "1년", "3년", "전체"],
+        index=3,
         horizontal=True,
     )
-    col_map = {
-        "ROE": ("roe", "#d92d20"),
-        "부채비율": ("debt_ratio", "#7839ee"),
-        "영업이익률": ("op_margin", "#0e9384"),
-        "배당성향": ("payout_ratio", "#dc6803"),
-    }
-    col_name, color = col_map[metric_choice]
-    series = fin[["기간", col_name]].dropna()
 
-    if series.empty:
-        st.info(f"{metric_choice} 데이터가 아직 없습니다.")
+    months_map = {"1개월": 1, "3개월": 3, "6개월": 6, "1년": 12, "3년": 36}
+    plot_df = hist
+    if range_label in months_map:
+        cutoff = hist["trade_date"].max() - pd.DateOffset(months=months_map[range_label])
+        plot_df = hist[hist["trade_date"] >= cutoff]
+
+    if plot_df.empty:
+        st.info("이 기간에는 아직 데이터가 없습니다. 더 긴 기간을 골라 보세요.")
     else:
-        fig_fin = go.Figure(
-            go.Bar(
-                x=series["기간"],
-                y=series[col_name],
-                marker=dict(color=color),
-                hovertemplate="%{x}<br>" + metric_choice + " %{y:,.2f}%<extra></extra>",
+        first_close = float(plot_df["close"].iloc[0])
+        last_close = float(plot_df["close"].iloc[-1])
+        period_ret = (last_close / first_close - 1) * 100 if first_close else 0.0
+        # 오르면 빨강, 내리면 파랑 (국내 증시 표기 관행)
+        line_color = "#d92d20" if period_ret >= 0 else "#1570ef"
+
+        # 점이 몇 개 없으면 선이 안 보이므로 점도 함께 찍습니다.
+        mode = "lines+markers" if len(plot_df) <= 40 else "lines"
+
+        fig = go.Figure(
+            go.Scatter(
+                x=plot_df["trade_date"],
+                y=plot_df["close"],
+                mode=mode,
+                line=dict(width=2, color=line_color),
+                marker=dict(size=6, color=line_color),
+                fill="tozeroy",
+                fillcolor=("rgba(217,45,32,.08)" if period_ret >= 0
+                           else "rgba(21,112,239,.08)"),
+                hovertemplate="%{x|%Y-%m-%d}<br>종가 %{y:,.0f}원<extra></extra>",
             )
         )
-        fig_fin.update_yaxes(title_text=f"{metric_choice} (%)", tickformat=",.1f")
-        fig_fin.update_layout(
-            height=320,
-            margin=dict(l=10, r=10, t=30, b=10),
-            showlegend=False,
-            title=dict(text=f"분기별 {metric_choice} 추이", font=dict(size=14)),
+
+        # 세로축은 0 부터가 아니라 실제 주가 범위에 맞춥니다 (변동이 잘 보이도록).
+        lo, hi = float(plot_df["close"].min()), float(plot_df["close"].max())
+        pad = max((hi - lo) * 0.10, max(hi * 0.02, 1))
+
+        fig.update_yaxes(
+            title_text=None,
+            tickformat=",.0f",
+            range=[max(lo - pad, 0), hi + pad],
+            gridcolor="#eef2f7",
         )
-        st.plotly_chart(fig_fin, width="stretch")
+        # 가로축은 날짜만 표시 (데이터가 적을 때 시:분:초가 뜨는 것을 막습니다)
+        fig.update_xaxes(
+            title_text=None, tickformat="%y.%m", hoverformat="%Y-%m-%d",
+            gridcolor="#f5f7fa",
+        )
+        fig.update_layout(
+            # 휴대폰에서 화면을 덜 차지하도록 430 → 340 으로 낮췄습니다.
+            height=340,
+            margin=dict(l=6, r=6, t=44, b=6),
+            hovermode="x unified",
+            showlegend=False,
+            plot_bgcolor="white",
+            title=dict(
+                # 위쪽 '기간별 수익률' 과 헷갈리지 않게 표현을 구분합니다.
+                # 이것은 '차트에 그려진 구간의 처음 → 끝' 변동입니다.
+                text=(
+                    f"차트 구간 변동  {period_ret:+.2f}%　"
+                    f"({plot_df['trade_date'].min():%Y-%m-%d} ~ "
+                    f"{plot_df['trade_date'].max():%Y-%m-%d}, 거래일 {len(plot_df)}일)"
+                ),
+                font=dict(size=13),
+            ),
+        )
 
-    st.caption(
-        "⚠️ 분기 보고서는 그 기간만의 실적이라 연간(사업보고서)보다 값이 작게 나옵니다. "
-        "같은 분기끼리(작년 3분기 vs 올해 3분기) 비교하시는 게 맞습니다."
-    )
+        # displayModeBar=False : 차트 위에 뜨는 작은 도구막대를 없앱니다.
+        # (휴대폰에서 손가락에 눌려 확대·저장이 잘못 실행되는 것을 막습니다)
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-    with st.expander("재무제표 원본 금액 보기"):
-        raw = fin.copy()
-        for c, label in [
-            ("revenue", "매출액(억원)"),
-            ("operating_profit", "영업이익(억원)"),
-            ("net_income", "당기순이익(억원)"),
-            ("total_equity", "자본총계(억원)"),
-            ("total_liabilities", "부채총계(억원)"),
-            ("total_assets", "자산총계(억원)"),
-        ]:
-            raw[label] = (
-                pd.to_numeric(raw[c], errors="coerce") / 100_000_000
-            ).round(0).astype("Float64").astype("Int64")
-        show_cols = ["기간", "매출액(억원)", "영업이익(억원)", "당기순이익(억원)",
-                     "자본총계(억원)", "부채총계(억원)", "자산총계(억원)"]
+        # 데이터가 너무 적으면 왜 그런지 알려줍니다.
+        if len(plot_df) < 5:
+            st.warning(
+                f"이 기간에 저장된 거래일이 {len(plot_df)}일뿐이라 그래프가 거의 "
+                "비어 보입니다. 과거 데이터 수집이 아직 진행 중이기 때문입니다. "
+                "수집이 끝나면 정상적으로 그려집니다."
+            )
+
+    with st.expander("시세 원본 데이터 보기 (최근 60일)"):
+        recent = hist.sort_values("trade_date", ascending=False).head(60).copy()
+        recent["날짜"] = recent["trade_date"].dt.strftime("%Y-%m-%d")
+        recent["종가(원)"] = pd.to_numeric(recent["close"], errors="coerce").astype("Int64")
+        recent["등락률(%)"] = pd.to_numeric(
+            recent["change_pct"], errors="coerce"
+        ).astype("Float64").round(2)
+        recent["거래량(주)"] = pd.to_numeric(
+            recent["volume"], errors="coerce"
+        ).astype("Int64")
+        # 시가총액은 원 단위 그대로 두면 자릿수가 너무 길어 억원으로 바꿉니다.
+        recent["시가총액(억원)"] = (
+            pd.to_numeric(recent["market_cap"], errors="coerce") / 100_000_000
+        ).round(0).astype("Float64").astype("Int64")
+
         st.dataframe(
-            raw[show_cols].iloc[::-1],
+            recent[["날짜", "종가(원)", "등락률(%)", "거래량(주)", "시가총액(억원)"]]
+            .style.map(color_updown, subset=["등락률(%)"]),
             width="stretch",
             hide_index=True,
             column_config={
-                c: st.column_config.NumberColumn(format="localized")
-                for c in show_cols[1:]
+                "종가(원)": st.column_config.NumberColumn(format="localized"),
+                "등락률(%)": st.column_config.NumberColumn(format="localized"),
+                "거래량(주)": st.column_config.NumberColumn(format="localized"),
+                "시가총액(억원)": st.column_config.NumberColumn(
+                    format="localized",
+                    help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
+                ),
             },
         )
 
-st.divider()
-with st.expander("시세 원본 데이터 보기 (최근 60일)"):
-    recent = hist.sort_values("trade_date", ascending=False).head(60).copy()
-    recent["날짜"] = recent["trade_date"].dt.strftime("%Y-%m-%d")
-    recent["종가(원)"] = pd.to_numeric(recent["close"], errors="coerce").astype("Int64")
-    recent["등락률(%)"] = pd.to_numeric(
-        recent["change_pct"], errors="coerce"
-    ).astype("Float64").round(2)
-    recent["거래량(주)"] = pd.to_numeric(
-        recent["volume"], errors="coerce"
-    ).astype("Int64")
-    # 시가총액은 원 단위 그대로 두면 자릿수가 너무 길어 억원으로 바꿉니다.
-    recent["시가총액(억원)"] = (
-        pd.to_numeric(recent["market_cap"], errors="coerce") / 100_000_000
-    ).round(0).astype("Float64").astype("Int64")
 
-    st.dataframe(
-        recent[["날짜", "종가(원)", "등락률(%)", "거래량(주)", "시가총액(억원)"]],
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "종가(원)": st.column_config.NumberColumn(format="localized"),
-            "등락률(%)": st.column_config.NumberColumn(format="localized"),
-            "거래량(주)": st.column_config.NumberColumn(format="localized"),
-            "시가총액(억원)": st.column_config.NumberColumn(
-                format="localized",
-                help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
-            ),
-        },
-    )
+# ── 재무 탭 (DART 전자공시) ──────────────────────────────────
+# 이 부분은 시세와 완전히 분리되어 있습니다.
+# 재무 데이터가 없거나 문제가 생겨도 차트 탭은 정상 동작합니다.
+with tab_fin:
+    st.markdown(headline)
+
+    fin = load_financials(code)
+
+    if fin.empty:
+        st.info(
+            "이 종목은 재무지표가 없습니다.\n\n"
+            "ETF·리츠 등은 재무제표를 내지 않거나, 아직 수집되지 않았을 수 있습니다. "
+            "수집은 `python -m src.financial_collect` 로 실행합니다."
+        )
+    else:
+        latest = fin.iloc[-1]
+        st.caption(f"가장 최근 기준: **{latest['기간']}** · 출처: DART 전자공시")
+
+        m1, m2, m3, m4 = st.columns(4)
+
+        def _show(col, label, value, suffix="%", help_text=None):
+            if pd.isna(value):
+                col.metric(label, "—", help=help_text)
+            else:
+                col.metric(label, f"{float(value):,.2f}{suffix}", help=help_text)
+
+        _show(m1, "ROE", latest["roe"],
+              help_text="당기순이익 ÷ 자본총계 × 100. 높을수록 돈을 잘 버는 회사")
+        _show(m2, "부채비율", latest["debt_ratio"],
+              help_text="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사")
+        _show(m3, "영업이익률", latest["op_margin"],
+              help_text="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사")
+        _show(m4, "배당성향", latest["payout_ratio"],
+              help_text="현금배당금총액 ÷ 당기순이익 × 100. 연간 보고서에만 있습니다")
+
+        # 분기별 추이 차트
+        metric_choice = st.radio(
+            "추이로 볼 지표",
+            ["ROE", "부채비율", "영업이익률", "배당성향"],
+            index=0,
+            horizontal=True,
+        )
+        col_map = {
+            "ROE": ("roe", "#d92d20"),
+            "부채비율": ("debt_ratio", "#7839ee"),
+            "영업이익률": ("op_margin", "#0e9384"),
+            "배당성향": ("payout_ratio", "#dc6803"),
+        }
+        col_name, color = col_map[metric_choice]
+        series = fin[["기간", col_name]].dropna()
+
+        if series.empty:
+            st.info(f"{metric_choice} 데이터가 아직 없습니다.")
+        else:
+            fig_fin = go.Figure(
+                go.Bar(
+                    x=series["기간"],
+                    y=series[col_name],
+                    marker=dict(color=color),
+                    hovertemplate="%{x}<br>" + metric_choice + " %{y:,.2f}%<extra></extra>",
+                )
+            )
+            fig_fin.update_yaxes(
+                title_text=f"{metric_choice} (%)", tickformat=",.1f", gridcolor="#eef2f7"
+            )
+            fig_fin.update_layout(
+                height=300,
+                margin=dict(l=6, r=6, t=30, b=6),
+                showlegend=False,
+                plot_bgcolor="white",
+                title=dict(text=f"분기별 {metric_choice} 추이", font=dict(size=13)),
+            )
+            st.plotly_chart(fig_fin, width="stretch", config={"displayModeBar": False})
+
+        st.caption(
+            "⚠️ 분기 보고서는 그 기간만의 실적이라 연간(사업보고서)보다 값이 작게 나옵니다. "
+            "같은 분기끼리(작년 3분기 vs 올해 3분기) 비교하시는 게 맞습니다."
+        )
+
+        with st.expander("재무제표 원본 금액 보기"):
+            raw = fin.copy()
+            for c, label in [
+                ("revenue", "매출액(억원)"),
+                ("operating_profit", "영업이익(억원)"),
+                ("net_income", "당기순이익(억원)"),
+                ("total_equity", "자본총계(억원)"),
+                ("total_liabilities", "부채총계(억원)"),
+                ("total_assets", "자산총계(억원)"),
+            ]:
+                raw[label] = (
+                    pd.to_numeric(raw[c], errors="coerce") / 100_000_000
+                ).round(0).astype("Float64").astype("Int64")
+            show_cols = ["기간", "매출액(억원)", "영업이익(억원)", "당기순이익(억원)",
+                         "자본총계(억원)", "부채총계(억원)", "자산총계(억원)"]
+            st.dataframe(
+                raw[show_cols].iloc[::-1],
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    c: st.column_config.NumberColumn(format="localized")
+                    for c in show_cols[1:]
+                },
+            )
