@@ -22,6 +22,7 @@ import streamlit as st
 
 from src.db import get_conn
 from src.ui_korean import apply_korean_ui
+from src.ui_style import apply_style
 
 # pandas 가 psycopg2 연결을 쓸 때 내는 안내 경고를 숨깁니다.
 # (동작에는 문제가 없고, 화면에 노란 경고만 뜨는 것을 막기 위한 것입니다)
@@ -36,24 +37,13 @@ st.set_page_config(
     page_title="국내주식 대시보드",
     page_icon="📈",
     layout="wide",
+    # 휴대폰에서는 사이드바가 자동으로 접혀서 본문이 넓게 보입니다.
+    initial_sidebar_state="auto",
     menu_items={},  # 영어로 뜨는 기본 메뉴 항목을 비웁니다
 )
 
-# Streamlit 이 자동으로 붙이는 영어 요소들을 화면에서 감춥니다.
-# (우측 상단 Deploy 버튼 / 햄버거 메뉴 / 하단 Made with Streamlit 등)
-st.markdown(
-    """
-    <style>
-      [data-testid="stToolbar"]      { visibility: hidden; height: 0; position: fixed; }
-      [data-testid="stDecoration"]   { display: none; }
-      [data-testid="stStatusWidget"] { visibility: hidden; height: 0; }
-      #MainMenu                      { visibility: hidden; height: 0; }
-      footer                         { visibility: hidden; height: 0; }
-      .stDeployButton                { display: none; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# 화면 디자인(글자·색·간격·휴대폰 대응)을 적용합니다. → src/ui_style.py
+apply_style()
 
 # Streamlit 이 영어로 그리는 표 메뉴 등을 한글로 바꿉니다.
 apply_korean_ui()
@@ -278,6 +268,11 @@ def calc_period_returns(hist: pd.DataFrame) -> dict[str, float | None]:
 
 # ── 본문 ─────────────────────────────────────────────────────
 st.title("📈 국내주식 대시보드")
+st.caption(
+    "왼쪽 **검색 · 필터**에서 조건을 걸어 종목을 찾고, 표에서 종목을 고르면 "
+    "차트와 재무지표가 나타납니다.  "
+    "📱 휴대폰에서는 화면 왼쪽 위 **`≫`** 를 누르면 필터가 열립니다."
+)
 
 try:
     meta = load_meta()
@@ -310,99 +305,28 @@ if df.empty:
     st.stop()
 
 # ── 왼쪽 사이드바: 검색 및 필터 ────────────────────────────────
+# 필터가 많으면 화면이 길어져 찾기 어려우므로, 주제별로 '접이식 카드'에 넣었습니다.
+# 자주 쓰는 검색과 정렬은 항상 보이게 두고, 나머지는 접어둡니다.
+#
+# 각 입력칸의 key= 는 '이 값을 부르는 이름표'입니다.
+# 아래쪽 '필터 초기화' 버튼이 이 이름표들을 지워서 처음 상태로 되돌립니다.
+FILTER_KEYS = [
+    "f_kw", "f_kinds", "f_markets", "f_price", "f_cap", "f_vol", "f_chg",
+    "f_retp", "f_ret", "f_per", "f_roe", "f_debt", "f_fin", "f_sort",
+]
+
 with st.sidebar:
     st.header("🔎 검색 · 필터")
 
     keyword = st.text_input(
         "종목명 · 종목코드 검색",
         placeholder="예: 삼성, KODEX, 005930",
+        key="f_kw",
         help="여러 단어를 띄어쓰기로 넣으면 그중 하나라도 맞는 종목을 찾습니다.",
     )
 
-    kinds = st.multiselect("종류", ["주식", "ETF"], default=["주식", "ETF"])
-    markets = st.multiselect("시장", ["KOSPI", "KOSDAQ"], default=["KOSPI", "KOSDAQ"])
-
-    st.divider()
-    st.markdown("**숫자 조건으로 걸러내기**")
-
-    price_min, price_max = st.slider(
-        "주가 범위 (원)",
-        min_value=0,
-        max_value=1_000_000,
-        value=(0, 1_000_000),
-        step=1_000,
-        help="양쪽 끝에 두면 제한 없음",
-    )
-
-    min_cap = st.number_input(
-        "최소 시가총액 (억원)",
-        min_value=0,
-        value=0,
-        step=100,
-        help="0 이면 제한 없음. ETF 는 거래소가 시가총액을 주지 않아 빈칸이며, "
-             "이 값을 1 이상으로 두면 ETF 는 목록에서 빠집니다.",
-    )
-
-    min_volume = st.number_input(
-        "최소 거래량 (주)",
-        min_value=0,
-        value=0,
-        step=1_000,
-        help="거래가 거의 없는 종목을 걸러낼 때 사용하세요. 0 이면 제한 없음.",
-    )
-
-    chg_min, chg_max = st.slider(
-        "등락률 범위 (%)",
-        min_value=-30.0,
-        max_value=30.0,
-        value=(-30.0, 30.0),
-        step=0.5,
-        help="양쪽 끝에 두면 제한 없음",
-    )
-
-    st.divider()
-    st.markdown("**수익률로 걸러내기**")
-
-    ret_period = st.selectbox(
-        "기준 기간",
-        ["사용 안 함"] + list(PERIODS.keys()),
-        index=0,
-        help="예: '1년' 을 고르고 최소값을 20 으로 두면, "
-             "1년 수익률이 20% 이상인 종목만 남습니다.",
-    )
-    ret_min, ret_max = st.slider(
-        "수익률 범위 (%)",
-        min_value=-100.0,
-        max_value=300.0,
-        value=(-100.0, 300.0),
-        step=5.0,
-        disabled=(ret_period == "사용 안 함"),
-    )
-
-    st.divider()
-    st.markdown("**재무지표로 걸러내기**")
-    st.caption("DART 전자공시 기준. ETF 는 재무제표가 없어 해당 없음.")
-
-    per_max = st.number_input(
-        "PER 최대 (이하만 보기)", min_value=0.0, value=0.0, step=1.0,
-        help="0 이면 제한 없음. 예: 10 을 넣으면 PER 10 이하인 저평가 종목만.",
-    )
-    roe_min = st.number_input(
-        "ROE 최소 (%, 이상만 보기)", value=0.0, step=1.0,
-        help="0 이면 제한 없음. 예: 15 를 넣으면 ROE 15% 이상인 알짜 회사만.",
-    )
-    debt_max = st.number_input(
-        "부채비율 최대 (%, 이하만 보기)", min_value=0.0, value=0.0, step=10.0,
-        help="0 이면 제한 없음. 예: 100 을 넣으면 빚이 자기 돈보다 적은 회사만.",
-    )
-    only_with_fin = st.checkbox(
-        "재무지표가 있는 종목만 보기", value=False,
-        help="켜면 ETF 와 재무제표가 없는 종목이 목록에서 빠집니다.",
-    )
-
-    st.divider()
-    # 정렬은 '무엇을 크게/작게 볼지'를 이름으로 고르게 합니다.
-    # (컬럼명 + 오름/내림 조합을 매번 고르는 것보다 훨씬 쉽습니다)
+    # 정렬은 가장 자주 바꾸는 항목이라 접지 않고 항상 보이게 둡니다.
+    # '무엇을 크게/작게 볼지'를 이름으로 고르게 했습니다.
     SORT_PRESETS: dict[str, tuple[str, bool]] = {
         "시가총액 큰 순": ("시가총액(억)", False),
         "등락률 높은 순": ("등락률(%)", False),
@@ -417,11 +341,112 @@ with st.sidebar:
         **{f"수익률 {p} 높은 순": (f"수익률 {p}(%)", False) for p in PERIODS},
         **{f"수익률 {p} 낮은 순": (f"수익률 {p}(%)", True) for p in PERIODS},
     }
-    sort_label = st.selectbox("정렬 기준", list(SORT_PRESETS.keys()), index=0)
+    sort_label = st.selectbox(
+        "↕️ 정렬 기준", list(SORT_PRESETS.keys()), index=0, key="f_sort"
+    )
     sort_col, ascending = SORT_PRESETS[sort_label]
 
+    st.caption("아래 항목을 눌러 펼치면 조건을 더 자세히 걸 수 있습니다.")
+
+    # ── 접이식 카드 ①: 종류 · 시장 ──
+    with st.expander("🏷️ 종류 · 시장", expanded=False):
+        kinds = st.multiselect(
+            "종류", ["주식", "ETF"], default=["주식", "ETF"], key="f_kinds"
+        )
+        markets = st.multiselect(
+            "시장", ["KOSPI", "KOSDAQ"], default=["KOSPI", "KOSDAQ"], key="f_markets"
+        )
+
+    # ── 접이식 카드 ②: 가격 · 규모 · 거래량 ──
+    with st.expander("💰 가격 · 규모 · 거래량", expanded=False):
+        price_min, price_max = st.slider(
+            "주가 범위 (원)",
+            min_value=0, max_value=1_000_000, value=(0, 1_000_000), step=1_000,
+            key="f_price",
+            help="양쪽 끝에 두면 제한 없음",
+        )
+        min_cap = st.number_input(
+            "최소 시가총액 (억원)",
+            min_value=0, value=0, step=100, key="f_cap",
+            help="0 이면 제한 없음. ETF 는 거래소가 시가총액을 주지 않아 빈칸이며, "
+                 "이 값을 1 이상으로 두면 ETF 는 목록에서 빠집니다.",
+        )
+        min_volume = st.number_input(
+            "최소 거래량 (주)",
+            min_value=0, value=0, step=1_000, key="f_vol",
+            help="거래가 거의 없는 종목을 걸러낼 때 사용하세요. 0 이면 제한 없음.",
+        )
+        chg_min, chg_max = st.slider(
+            "등락률 범위 (%)",
+            min_value=-30.0, max_value=30.0, value=(-30.0, 30.0), step=0.5,
+            key="f_chg",
+            help="양쪽 끝에 두면 제한 없음",
+        )
+
+    # ── 접이식 카드 ③: 수익률 ──
+    with st.expander("📈 수익률", expanded=False):
+        ret_period = st.selectbox(
+            "기준 기간",
+            ["사용 안 함"] + list(PERIODS.keys()), index=0, key="f_retp",
+            help="예: '1년' 을 고르고 최소값을 20 으로 두면, "
+                 "1년 수익률이 20% 이상인 종목만 남습니다.",
+        )
+        ret_min, ret_max = st.slider(
+            "수익률 범위 (%)",
+            min_value=-100.0, max_value=300.0, value=(-100.0, 300.0), step=5.0,
+            key="f_ret",
+            disabled=(ret_period == "사용 안 함"),
+        )
+
+    # ── 접이식 카드 ④: 재무지표 ──
+    with st.expander("🏦 재무지표", expanded=False):
+        st.caption("DART 전자공시 기준. ETF 는 재무제표가 없어 해당 없음.")
+        per_max = st.number_input(
+            "PER 최대 (이하만 보기)", min_value=0.0, value=0.0, step=1.0, key="f_per",
+            help="0 이면 제한 없음. 예: 10 을 넣으면 PER 10 이하인 저평가 종목만.",
+        )
+        roe_min = st.number_input(
+            "ROE 최소 (%, 이상만 보기)", value=0.0, step=1.0, key="f_roe",
+            help="0 이면 제한 없음. 예: 15 를 넣으면 ROE 15% 이상인 알짜 회사만.",
+        )
+        debt_max = st.number_input(
+            "부채비율 최대 (%, 이하만 보기)",
+            min_value=0.0, value=0.0, step=10.0, key="f_debt",
+            help="0 이면 제한 없음. 예: 100 을 넣으면 빚이 자기 돈보다 적은 회사만.",
+        )
+        only_with_fin = st.checkbox(
+            "재무지표가 있는 종목만 보기", value=False, key="f_fin",
+            help="켜면 ETF 와 재무제표가 없는 종목이 목록에서 빠집니다.",
+        )
+
+    # 지금 몇 개의 조건이 걸려 있는지 알려줍니다.
+    # (접어두면 안 보이기 때문에, 조건이 걸린 줄 모르고 헤매는 일을 막아줍니다)
+    active = sum([
+        bool(keyword.strip()),
+        set(kinds) != {"주식", "ETF"},
+        set(markets) != {"KOSPI", "KOSDAQ"},
+        (price_min, price_max) != (0, 1_000_000),
+        min_cap > 0,
+        min_volume > 0,
+        (chg_min, chg_max) != (-30.0, 30.0),
+        ret_period != "사용 안 함",
+        per_max > 0,
+        roe_min != 0,
+        debt_max > 0,
+        only_with_fin,
+    ])
+    if active:
+        st.success(f"조건 {active}개 적용 중")
+    else:
+        st.caption("조건 없음 — 전체 종목을 보고 있습니다.")
+
     st.divider()
-    if st.button("🔄 최신 데이터 다시 읽기", width="stretch"):
+    b1, b2 = st.columns(2)
+    if b1.button("↩️ 필터 초기화", width="stretch", help="모든 조건을 처음 상태로"):
+        for k in FILTER_KEYS:
+            st.session_state.pop(k, None)
+        st.rerun()
+    if b2.button("🔄 새로 읽기", width="stretch", help="최신 데이터를 다시 불러옵니다"):
         st.cache_data.clear()
         st.rerun()
 
@@ -486,9 +511,10 @@ table = view[display_cols].reset_index(drop=True)
 
 st.subheader(f"종목 목록  ({len(table):,}개)")
 st.caption(
-    "표 왼쪽 끝의 네모(☐)를 클릭하거나, 표 아래의 **종목 선택**에서 고르면 "
+    "표 왼쪽 끝의 네모(☐)를 누르거나, 표 아래의 **종목 선택**에서 고르면 "
     "차트와 기간별 수익률이 나타납니다. "
-    "열 제목을 클릭하면 그 열 기준으로 정렬됩니다."
+    "열 제목을 누르면 그 열 기준으로 정렬됩니다. "
+    "📱 휴대폰에서는 표를 **옆으로 밀어** 나머지 항목(PER·ROE·수익률 등)을 볼 수 있습니다."
 )
 
 if table.empty:

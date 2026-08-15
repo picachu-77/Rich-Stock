@@ -67,6 +67,9 @@ TRANSLATIONS: dict[str, str] = {
     "Exit fullscreen": "전체화면 끝내기",
     "Close": "닫기",
     "Clear": "지우기",
+    # ── 왼쪽 페이지 메뉴 ──
+    # 첫 화면(app.py)의 메뉴 이름이 파일 이름 그대로 'app' 으로 나오는 것을 바꿉니다.
+    "app": "종목 대시보드",
     # ── 기타 공통 ──
     "Press Enter to apply": "Enter 를 누르면 적용됩니다",
     "Deploy": "배포",

@@ -18,32 +18,64 @@ import streamlit as st
 
 from src.glossary_data import CATEGORY_ORDER, TERMS
 from src.ui_korean import apply_korean_ui
+from src.ui_style import apply_style
 
 st.set_page_config(
     page_title="주식 용어 사전",
     page_icon="📖",
     layout="wide",
+    initial_sidebar_state="auto",
     menu_items={},
 )
 
-# 대시보드 화면과 똑같이, Streamlit 이 붙이는 영어 요소를 감춥니다.
+# 대시보드와 똑같은 공통 디자인을 적용합니다. → src/ui_style.py
+apply_style()
+
+# 이 화면에만 필요한 모양(용어 카드 속 예시 상자, 유튜브 버튼)
 st.markdown(
     """
     <style>
-      [data-testid="stToolbar"]      { visibility: hidden; height: 0; position: fixed; }
-      [data-testid="stDecoration"]   { display: none; }
-      [data-testid="stStatusWidget"] { visibility: hidden; height: 0; }
-      #MainMenu                      { visibility: hidden; height: 0; }
-      footer                         { visibility: hidden; height: 0; }
-      .stDeployButton                { display: none; }
+      .term-detail { line-height: 1.8; margin: .1rem 0 .9rem 0; font-size: 1rem; }
 
-      /* 용어 카드 안쪽 글씨 모양 */
-      .term-short  { font-size: 1.02rem; font-weight: 600; margin: 0 0 .6rem 0; }
-      .term-detail { line-height: 1.75; margin: 0 0 .8rem 0; }
-      .term-ex     { background: rgba(127,127,127,.10); border-left: 4px solid #0e9384;
-                     padding: .6rem .9rem; border-radius: 4px; margin: 0 0 .8rem 0; }
-      .term-yt a   { color: #d92d20; font-weight: 600; text-decoration: none; }
-      .term-yt a:hover { text-decoration: underline; }
+      /* 숫자 예시 상자 */
+      .term-ex {
+        background: #f0fdfa;
+        border-left: 4px solid #0e9384;
+        padding: .7rem .95rem;
+        border-radius: 8px;
+        margin: 0 0 .9rem 0;
+        line-height: 1.7;
+      }
+
+      /* 유튜브 링크를 '버튼'처럼 보이게 (손가락으로 누르기 쉽게) */
+      .term-yt a {
+        display: inline-block;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #b42318;
+        font-weight: 700;
+        text-decoration: none;
+        padding: .5rem .9rem;
+        border-radius: 999px;
+        min-height: 40px;
+        line-height: 1.6;
+      }
+      .term-yt a:hover { background: #fee4e2; border-color: #fda29b; }
+
+      /* 분류 제목 */
+      .cat-head {
+        border-left: 5px solid #2563eb;
+        padding-left: .6rem;
+        margin: 1.4rem 0 .7rem 0;
+        font-size: 1.2rem;
+        font-weight: 800;
+      }
+      .cat-head span { color: #64748b; font-weight: 600; font-size: .9rem; }
+
+      @media (max-width: 640px) {
+        .term-detail, .term-ex { font-size: .97rem; }
+        .term-yt a { width: 100%; text-align: center; }
+      }
     </style>
     """,
     unsafe_allow_html=True,
@@ -123,6 +155,12 @@ with c2:
         help="보고 싶은 분류만 골라서 볼 수 있습니다.",
     )
 
+open_all = st.toggle(
+    "모든 용어 펼쳐 보기",
+    value=False,
+    help="켜면 설명이 한 번에 다 보입니다. 끄면 제목만 보여 훑어보기 좋습니다.",
+)
+
 words = [w.lower() for w in keyword.split() if w.strip()]
 searching = bool(words)
 
@@ -148,10 +186,13 @@ for category in CATEGORY_ORDER:
     if not group:
         continue
 
-    st.subheader(f"{category}  ({len(group)}개)")
+    st.markdown(
+        f"<div class='cat-head'>{category} <span>· {len(group)}개</span></div>",
+        unsafe_allow_html=True,
+    )
     for term in group:
-        # 검색 중일 때는 결과를 바로 읽을 수 있게 펼쳐서 보여줍니다.
-        render_term(term, opened=searching)
+        # 검색 중이거나 '모두 펼치기'를 켜면, 설명이 바로 보이게 펼쳐줍니다.
+        render_term(term, opened=searching or open_all)
     st.write("")
 
 st.divider()
