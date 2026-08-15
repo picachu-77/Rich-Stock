@@ -16,10 +16,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.market_data import load_overview
+from urllib.parse import quote_plus
+
+from src.market_data import load_overview, load_track_record
 from src.scoring import (
     GROUPS,
     METRICS,
+    MIN_PEERS,
     WEIGHT_PRESETS,
     explain,
     score_table,
@@ -63,6 +66,27 @@ st.markdown(
       .bar-bg { flex: 1; background: #f1f5f9; border-radius: 999px; height: 10px; overflow: hidden; }
       .bar-fill { height: 100%; border-radius: 999px; background: #2563eb; }
       .bar-val { min-width: 34px; text-align: right; font-weight: 700; color: #0f172a; }
+      .sector-row { margin: .45rem 0 .5rem 0; }
+      .sector-tag {
+        display: inline-block; font-size: .75rem; font-weight: 700; color: #1e40af;
+        background: #eff6ff; border: 1px solid #bfdbfe;
+        border-radius: 999px; padding: .12rem .55rem; margin-right: .3rem;
+      }
+      .link-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
+      .link-row a {
+        display: inline-block; text-decoration: none; font-weight: 700; font-size: .88rem;
+        border: 1px solid #e2e8f0; background: #f8fafc; color: #0f172a;
+        border-radius: 999px; padding: .45rem .85rem; min-height: 38px; line-height: 1.6;
+      }
+      .link-row a:hover { background: #eef2f7; border-color: #cbd5e1; }
+      .fact-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: .25rem .8rem;
+        font-size: .9rem; color: #475569; margin: .3rem 0 .2rem 0;
+      }
+      .fact-grid b { color: #0f172a; }
+      @media (max-width: 640px) {
+        .link-row a { flex: 1 1 46%; text-align: center; }
+      }
       @media (max-width: 640px) {
         .rank-name { font-size: 1rem; }
         .rank-total { font-size: 1.1rem; }
@@ -95,9 +119,38 @@ if df.empty:
     st.warning("최근 30일 내 시세가 없습니다. 수집기를 먼저 실행해 주세요.")
     st.stop()
 
+# 실적 꾸준함(여러 분기의 흑자·매출 흐름)을 붙입니다.
+track = load_track_record()
+if not track.empty:
+    df = df.merge(track, on="종목코드", how="left")
+else:
+    for col in ["흑자비율(%)", "매출성장(%)", "흑자분기수", "보고서수", "배당지속"]:
+        df[col] = pd.NA
+
+# 업종 정보를 아직 한 번도 수집하지 않았다면 알려줍니다.
+has_sector = (df["업종"] != "업종 미상").any()
+if not has_sector:
+    st.info(
+        "**업종 정보가 아직 없습니다.** 지금은 업종과 상관없이 같은 잣대로만 비교합니다.\n\n"
+        "업종별 비교를 켜려면 GitHub 저장소 → **Actions** 탭 → "
+        "**분기별 재무지표 수집** → **Run workflow** 를 한 번 눌러주세요. "
+        "회사 업종·대표이사 정보를 받아옵니다(약 5~10분)."
+    )
+
 # ── 사이드바: 점수 기준 정하기 ────────────────────────────────
 with st.sidebar:
     st.header("⚙️ 점수 기준")
+
+    mode = st.radio(
+        "비교 방식",
+        ["같은 업종끼리 비교", "업종 상관없이 비교"],
+        index=0 if has_sector else 1,
+        disabled=not has_sector,
+        help="업종마다 정상 범위가 다릅니다. 은행은 원래 부채비율이 수백 %이고 "
+             "소프트웨어는 원래 PBR 이 높습니다. '같은 업종끼리 비교'를 고르면 "
+             "그 업종 안에서 몇 등인지로 점수를 매겨 공정해집니다.",
+    )
+    score_mode = "같은 업종 비교" if mode == "같은 업종끼리 비교" else "절대 기준"
 
     preset_name = st.selectbox(
         "무엇을 중요하게 볼까요?",
@@ -126,6 +179,16 @@ with st.sidebar:
         markets = st.multiselect(
             "시장", ["KOSPI", "KOSDAQ"], default=["KOSPI", "KOSDAQ"]
         )
+        sector_options = sorted(
+            s for s in df["업종"].dropna().unique() if s != "업종 미상"
+        )
+        chosen_sectors = st.multiselect(
+            "업종 (비워두면 전체)",
+            sector_options,
+            default=[],
+            disabled=not has_sector,
+            help="특정 업종 안에서만 좋은 회사를 찾고 싶을 때 쓰세요.",
+        )
         min_cap = st.number_input(
             "최소 시가총액 (억원)", min_value=0, value=3_000, step=500,
             help="너무 작은 회사는 가격이 크게 흔들리고 정보도 적습니다. "
@@ -147,14 +210,23 @@ with st.sidebar:
 pool = df[df["종류"] == "주식"].copy()
 if markets:
     pool = pool[pool["시장"].isin(markets)]
+if chosen_sectors:
+    pool = pool[pool["업종"].isin(chosen_sectors)]
 if min_cap > 0:
     pool = pool[pool["시가총액(억)"].astype("Float64").fillna(-1) >= min_cap]
 if min_volume > 0:
     pool = pool[pool["거래량"].astype("Float64").fillna(-1) >= min_volume]
 
-scored = score_table(pool, weights)
+scored = score_table(pool, weights, mode=score_mode)
 ranked = scored[scored["자료충분"]].sort_values("총점", ascending=False)
 dropped = int((~scored["자료충분"]).sum())
+
+# 업종 안에서 몇 등인지도 함께 계산합니다.
+if "업종" in ranked.columns and not ranked.empty:
+    ranked["업종내순위"] = ranked.groupby("업종")["총점"].rank(
+        ascending=False, method="min"
+    )
+    ranked["업종내총수"] = ranked.groupby("업종")["총점"].transform("count")
 
 # ── 요약 ─────────────────────────────────────────────────────
 c1, c2, c3 = st.columns(3)
@@ -162,7 +234,21 @@ c1.metric("점수를 매긴 종목", f"{len(ranked):,}개")
 c2.metric("자료 부족으로 제외", f"{dropped:,}개",
           help="ROE·부채비율·PER·PBR 중 하나라도 없으면 순위에서 뺍니다. "
                "적자 기업은 PER 이 없어 여기에 포함됩니다.")
-c3.metric("기준", preset_name)
+c3.metric("비교 방식", "같은 업종끼리" if score_mode == "같은 업종 비교" else "업종 무관")
+
+if score_mode == "같은 업종 비교" and "업종비교적용" in scored.columns:
+    applied = int(scored["업종비교적용"].sum())
+    st.caption(
+        f"**점수 = 같은 업종 안에서의 등수**입니다. 100점이면 그 업종에서 1등, "
+        f"50점이면 딱 중간이라는 뜻입니다. "
+        f"적용된 종목 {applied:,}개 · 업종을 모르거나 같은 업종이 {MIN_PEERS}곳 "
+        "미만인 종목은 공통 기준으로 점수를 매겼습니다."
+    )
+else:
+    st.caption(
+        "**점수 = 정해진 눈금에 따른 절대 점수**입니다. 업종과 상관없이 같은 잣대로 "
+        "재기 때문에, 원래 빚이 많은 은행·건설은 낮게 나오는 점을 감안하세요."
+    )
 
 if ranked.empty:
     st.warning(
@@ -195,6 +281,14 @@ def bar(label: str, score: float | None) -> str:
 
 for i, row in top.iterrows():
     rank = i + 1
+
+    # 업종과 업종 내 순위를 함께 보여줍니다.
+    sector = row.get("업종") or "업종 미상"
+    tag = f"<span class='sector-tag'>{sector}</span>"
+    if pd.notna(row.get("업종내순위")) and sector != "업종 미상":
+        tag += (f"<span class='sector-tag'>업종 내 "
+                f"{int(row['업종내순위'])}위 / {int(row['업종내총수'])}개</span>")
+
     st.markdown(
         f"""
         <div class="rank-card">
@@ -204,6 +298,7 @@ for i, row in top.iterrows():
                  <span class="rank-code">{row['종목코드']} · {row['시장']}</span></div>
             <div class="rank-total">{row['총점']:.0f}<span> / 100</span></div>
           </div>
+          <div class="sector-row">{tag}</div>
           {''.join(bar(g, row[f'묶음_{g}']) for g in GROUPS)}
           <div class="rank-sum">{summary_sentence(row)}</div>
         </div>
@@ -212,6 +307,54 @@ for i, row in top.iterrows():
     )
 
     with st.expander(f"🔎 {row['종목명']} — 근거 자세히 보기"):
+        # ── 회사 정보 (DART 기업개황) ──
+        st.markdown("**🏢 회사 정보**")
+        est_years = row.get("업력(년)")
+        track_txt = "자료 없음"
+        if pd.notna(row.get("보고서수")) and row.get("보고서수"):
+            track_txt = (f"최근 {int(row['보고서수'])}개 보고서 중 "
+                         f"{int(row['흑자분기수'])}개 흑자")
+        st.markdown(
+            f"""
+            <div class="fact-grid">
+              <div>업종 <b>{sector}</b></div>
+              <div>대표이사 <b>{row.get('대표이사') or '정보 없음'}</b></div>
+              <div>업력 <b>{f'{int(est_years)}년' if pd.notna(est_years) else '정보 없음'}</b></div>
+              <div>실적 이력 <b>{track_txt}</b></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── 사업내용·뉴스·공시는 원문을 직접 보시도록 링크로 엽니다 ──
+        # (뉴스 내용을 점수로 바꾸지 않습니다. 근거가 약하고 오판을 부르기 때문입니다)
+        name_q = quote_plus(str(row["종목명"]))
+        links = [
+            (f"https://finance.naver.com/item/main.naver?code={row['종목코드']}",
+             "📊 네이버 금융 (사업내용·시세)"),
+            (f"https://search.naver.com/search.naver?where=news&query={name_q}",
+             "📰 뉴스 검색"),
+            (f"https://dart.fss.or.kr/dsab007/main.do?textCrpNm={name_q}",
+             "📑 DART 공시·사업보고서"),
+        ]
+        if row.get("홈페이지"):
+            links.append((str(row["홈페이지"]), "🌐 회사 홈페이지"))
+
+        st.markdown(
+            "<div class='link-row'>"
+            + "".join(
+                f"<a href='{url}' target='_blank' rel='noopener'>{text}</a>"
+                for url, text in links
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "사업 내용·경영진 이력·최근 뉴스는 위 링크에서 직접 확인하세요. "
+            "이 점수는 숫자만 보고 매긴 것이라 그런 내용은 반영되어 있지 않습니다."
+        )
+
+        st.markdown("**📐 지표별 근거**")
         detail = pd.DataFrame(explain(row))
         st.dataframe(
             detail,
@@ -277,9 +420,16 @@ with st.expander("📏 점수를 어떻게 매기나요? (기준 전부 보기)"
 
 with st.expander("⚠️ 이 점수의 한계 (꼭 읽어보세요)", expanded=False):
     st.markdown(
-        "- **업종 차이를 반영하지 못합니다.** 지금 데이터에는 업종 정보가 없어 "
-        "은행·건설처럼 원래 부채비율이 높은 업종이 불리하게, 소프트웨어처럼 "
-        "PBR이 높은 업종이 불리하게 나옵니다. 같은 업종끼리 비교하는 것이 원칙입니다.\n"
+        "- **사업 내용과 경영진의 능력은 점수에 없습니다.** 대표이사 이름과 업력은 "
+        "보여주지만, 사람의 경영 능력을 숫자로 매기는 것은 불가능합니다. 대신 "
+        "'여러 분기 꾸준히 흑자였는가, 매출이 늘었는가'라는 **결과**로만 대신 봤습니다. "
+        "사업 내용은 위의 네이버 금융·DART 링크에서 직접 확인하셔야 합니다.\n"
+        "- **뉴스는 점수에 반영하지 않습니다.** 뉴스의 좋고 나쁨을 기계가 판정하면 "
+        "오판이 잦아, 링크로만 연결했습니다. 큰 악재는 숫자에 나타나기 전에 "
+        "뉴스에 먼저 나오므로 반드시 직접 확인하세요.\n"
+        "- **업종 분류가 거칩니다.** 표준산업분류 앞 두 자리로 묶어서 "
+        "'반도체'와 '전자부품'이 같은 업종으로 취급됩니다. 또 업종이 확인되지 않거나 "
+        f"같은 업종이 {MIN_PEERS}곳 미만이면 업종 비교를 적용하지 못합니다.\n"
         "- **과거 숫자입니다.** 재무제표는 이미 지나간 실적이고, 주가는 앞날의 기대로 "
         "움직입니다. 점수가 높아도 앞으로 실적이 나빠질 수 있습니다.\n"
         "- **싼 데는 이유가 있을 수 있습니다.** PER·PBR이 낮아 점수가 높게 나온 회사가 "

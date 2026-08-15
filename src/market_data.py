@@ -75,6 +75,7 @@ def load_overview() -> pd.DataFrame:
          ORDER BY code, trade_date DESC
     )
     SELECT t.code, t.name, t.market, t.kind, t.is_active,
+           t.sector_name, t.ceo_name, t.est_date, t.homepage,
            c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
            c.per, c.pbr, c.eps, c.bps, c.div_yield,
            f.roe, f.debt_ratio, f.op_margin, f.payout_ratio,
@@ -112,6 +113,18 @@ def load_overview() -> pd.DataFrame:
 
     df["종류"] = df["kind"].map({"STOCK": "주식", "ETF": "ETF"}).fillna(df["kind"])
     df["시장"] = df["market"]
+
+    # ── 회사 기본정보 (src/company_profile.py 가 채워 넣습니다) ──
+    # 아직 한 번도 수집하지 않았다면 빈칸이며, 화면은 '정보 없음'으로 표시합니다.
+    df["업종"] = df["sector_name"].fillna("업종 미상") if "sector_name" in df else "업종 미상"
+    df["대표이사"] = df["ceo_name"] if "ceo_name" in df else None
+    df["홈페이지"] = df["homepage"] if "homepage" in df else None
+    if "est_date" in df:
+        est = pd.to_datetime(df["est_date"], errors="coerce")
+        # 업력 = 설립일로부터 지난 햇수 (오래된 회사일수록 부침을 견뎌왔다는 뜻)
+        df["업력(년)"] = ((pd.Timestamp.today() - est).dt.days / 365.25).round(0).astype("Float64")
+    else:
+        df["업력(년)"] = pd.NA
     df["시가총액(억)"] = (
         pd.to_numeric(df["market_cap"], errors="coerce") / 100_000_000
     ).round(0)
@@ -153,3 +166,75 @@ def load_overview() -> pd.DataFrame:
         df[col] = df[col].astype("Float64")
 
     return df
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_track_record(quarters: int = 8) -> pd.DataFrame:
+    """
+    회사의 '실적 꾸준함'을 종목별로 한 번에 계산해서 가져옵니다.
+
+    왜 필요한가요?
+      "경영을 잘하는 회사인가"를 사람 이름으로 판단할 수는 없습니다.
+      대신 지나온 실적이 그 답을 어느 정도 보여줍니다.
+      한 해만 반짝 잘한 회사보다, 여러 해 꾸준히 흑자를 내고 매출을 늘려온
+      회사가 더 믿을 만하다고 보는 것입니다.
+
+    계산하는 것 (최근 quarters 개 보고서 기준)
+      흑자분기수   : 순이익이 0보다 컸던 보고서 수
+      보고서수     : 비교에 쓴 보고서 수
+      흑자비율(%)  : 흑자분기수 ÷ 보고서수 × 100
+      매출성장(%)  : 가장 오래된 보고서 대비 가장 최근 보고서의 매출 증가율
+      배당지속(회) : 배당성향이 0보다 컸던 보고서 수
+    """
+    sql = f"""
+    WITH recent AS (
+        SELECT f.*,
+               row_number() OVER (
+                   PARTITION BY f.code
+                   ORDER BY f.fiscal_year DESC, f.fiscal_quarter DESC
+               ) AS rn
+          FROM financial f
+    ),
+    picked AS (
+        SELECT * FROM recent WHERE rn <= {int(quarters)}
+    )
+    SELECT code,
+           count(*)                                       AS "보고서수",
+           count(*) FILTER (WHERE net_income > 0)         AS "흑자분기수",
+           count(*) FILTER (WHERE payout_ratio > 0)       AS "배당지속",
+           -- rn 이 작을수록 최근입니다. 매출이 있는 것만 모아 맨 앞/맨 뒤를 씁니다.
+           (array_agg(revenue ORDER BY rn ASC)
+                FILTER (WHERE revenue IS NOT NULL))[1]    AS "최근매출",
+           (array_agg(revenue ORDER BY rn DESC)
+                FILTER (WHERE revenue IS NOT NULL))[1]    AS "과거매출"
+      FROM picked
+     GROUP BY code;
+    """
+    try:
+        with get_conn() as conn:
+            df = pd.read_sql(sql, conn)
+    except Exception:  # noqa: BLE001
+        # 재무 이력이 없어도 나머지 화면은 정상 동작해야 합니다.
+        return pd.DataFrame(
+            columns=["종목코드", "보고서수", "흑자분기수", "흑자비율(%)",
+                     "매출성장(%)", "배당지속"]
+        )
+
+    if df.empty:
+        return df
+
+    df["흑자비율(%)"] = (
+        pd.to_numeric(df["흑자분기수"], errors="coerce")
+        / pd.to_numeric(df["보고서수"], errors="coerce") * 100
+    ).round(1)
+
+    past = pd.to_numeric(df["과거매출"], errors="coerce")
+    now = pd.to_numeric(df["최근매출"], errors="coerce")
+    # 과거 매출이 0이거나 없으면 성장률을 계산할 수 없습니다.
+    df["매출성장(%)"] = ((now / past.where(past > 0) - 1) * 100).round(1)
+
+    df.rename(columns={"code": "종목코드"}, inplace=True)
+    for col in ["흑자비율(%)", "매출성장(%)"]:
+        df[col] = df[col].astype("Float64")
+    return df[["종목코드", "보고서수", "흑자분기수", "흑자비율(%)",
+               "매출성장(%)", "배당지속"]]

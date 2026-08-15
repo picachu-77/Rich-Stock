@@ -84,6 +84,22 @@ CREATE TABLE IF NOT EXISTS ingest_log (
 ALTER TABLE ticker ADD COLUMN IF NOT EXISTS dart_corp_code TEXT;
 CREATE INDEX IF NOT EXISTS idx_ticker_dart ON ticker (dart_corp_code);
 
+-- 종목 표에 '회사 정보' 칸 추가 (DART 기업개황에서 가져옵니다)
+--   sector_code  업종코드    : 한국표준산업분류 숫자 코드 (예: 26410)
+--   sector_name  업종명      : 위 코드를 한글로 바꾼 것 (예: 전자·반도체)
+--                             → 같은 업종끼리 비교할 때 씁니다
+--   ceo_name     대표이사    : 회사를 이끄는 사람 이름
+--   est_date     설립일      : 회사가 만들어진 날 (업력 계산용)
+--   homepage     홈페이지 주소
+--   profile_updated_at  이 정보를 마지막으로 받아온 시각
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS sector_code        TEXT;
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS sector_name        TEXT;
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS ceo_name           TEXT;
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS est_date           DATE;
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS homepage           TEXT;
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS profile_updated_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_ticker_sector ON ticker (sector_name);
+
 -- 일별시세 표에 투자지표 칸 5개 추가 (pykrx 가 주는 값)
 --   PER  주가수익비율   : 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 싸다는 뜻
 --   PBR  주가순자산비율 : 주가 ÷ 주당순자산. 1보다 낮으면 장부가치보다 싸다는 뜻

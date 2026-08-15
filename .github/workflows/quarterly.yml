@@ -46,6 +46,11 @@ on:
         required: false
         default: false
         type: boolean
+      refresh_profile:
+        description: "회사 업종·대표이사 정보를 전부 다시 받기 (호출 약 2,600건)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: quarterly-financial
@@ -72,6 +77,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 표에 새로 생긴 칸(업종·대표이사 등)을 만들어 둡니다.
+      # 이미 있으면 아무 일도 하지 않으므로 몇 번을 실행해도 안전합니다.
+      - name: 표 구조 갱신
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.create_tables
+
       # 신규 상장 회사가 생겼을 수 있으니 회사코드 대응표를 먼저 갱신합니다.
       # (DART 호출 1건이면 끝납니다)
       - name: DART 회사코드 대응표 갱신
@@ -79,6 +91,21 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
         run: python -m src.dart_corpcode
+
+      # 회사 업종·대표이사·설립일을 받아옵니다.
+      # (우량주 찾기 화면에서 '같은 업종끼리 비교'에 씁니다)
+      # 평소에는 아직 정보가 없는 종목만 받아 호출이 몇 건뿐이고,
+      # refresh_profile 을 켜면 전체를 다시 받습니다(약 2,600건).
+      - name: 회사 기본정보(업종·대표이사) 수집
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.refresh_profile }}" = "true" ]; then
+            python -m src.company_profile --all
+          else
+            python -m src.company_profile
+          fi
 
       - name: 재무지표 수집
         env:
