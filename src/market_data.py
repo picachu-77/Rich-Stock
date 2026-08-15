@@ -59,7 +59,27 @@ def load_overview() -> pd.DataFrame:
     )
     select_returns = ", ".join(f"r{i}.close AS past{i}" for i in range(len(PERIODS)))
 
-    sql = f"""
+    # ★ 있는 칸만 골라서 조회합니다 ★
+    #   업종·대표이사 같은 칸은 나중에 추가된 것이라, 아직 표를 갱신하지 않은
+    #   데이터베이스에는 없을 수 있습니다. 없는 칸을 조회하면 화면 전체가
+    #   오류로 멈추므로, 먼저 어떤 칸이 있는지 물어보고 있는 것만 가져옵니다.
+    with get_conn() as conn:
+        existing = set(
+            pd.read_sql(
+                """
+                SELECT column_name FROM information_schema.columns
+                 WHERE table_name = 'ticker';
+                """,
+                conn,
+            )["column_name"]
+        )
+        profile_cols = [
+            c for c in ("sector_code", "sector_name", "ceo_name", "est_date", "homepage")
+            if c in existing
+        ]
+        profile_sql = "".join(f"\n           t.{c}," for c in profile_cols)
+
+        sql = f"""
     WITH bound AS (
         SELECT max(trade_date) AS last_d FROM daily_price
     ),
@@ -75,8 +95,7 @@ def load_overview() -> pd.DataFrame:
           FROM recent
          ORDER BY code, trade_date DESC
     )
-    SELECT t.code, t.name, t.market, t.kind, t.is_active,
-           t.sector_code, t.sector_name, t.ceo_name, t.est_date, t.homepage,
+    SELECT t.code, t.name, t.market, t.kind, t.is_active,{profile_sql}
            c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
            c.per, c.pbr, c.eps, c.bps, c.div_yield,
            f.roe, f.debt_ratio, f.op_margin, f.payout_ratio,
@@ -98,8 +117,6 @@ def load_overview() -> pd.DataFrame:
       {lateral_sql}
      WHERE t.is_active = TRUE;
     """
-
-    with get_conn() as conn:
         df = pd.read_sql(sql, conn)
 
     if df.empty:
