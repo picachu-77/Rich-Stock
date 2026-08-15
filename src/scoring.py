@@ -149,7 +149,22 @@ def score_one(metric: Metric, value) -> float | None:
 MIN_PEERS = 5   # 업종 안에 이만큼은 있어야 '같은 업종 비교'가 의미 있습니다
 
 
-def sector_relative_scores(df: pd.DataFrame, sector_col: str = "업종") -> pd.DataFrame:
+def _percentile_by(df: pd.DataFrame, groups: pd.Series) -> dict[str, pd.Series]:
+    """지표마다 '그 묶음 안에서 몇 등인가'를 백분위(0~100)로 바꿉니다."""
+    result = {}
+    for m in METRICS:
+        values = pd.to_numeric(df[m.key], errors="coerce")
+        # 낮을수록 좋은 지표(부채비율·PER·PBR)는 부호를 뒤집어 줄을 세웁니다.
+        ranked_input = values if m.higher_is_better else -values
+        result[m.label] = (ranked_input.groupby(groups).rank(pct=True) * 100).round(1)
+    return result
+
+
+def sector_relative_scores(
+    df: pd.DataFrame,
+    sector_col: str = "업종",
+    group_col: str = "업종(큰묶음)",
+) -> pd.DataFrame:
     """
     같은 업종 안에서 몇 등쯤인지를 0~100 점으로 바꿉니다.
 
@@ -159,24 +174,34 @@ def sector_relative_scores(df: pd.DataFrame, sector_col: str = "업종") -> pd.D
       그래서 '같은 업종 사람들끼리 줄 세웠을 때 몇 등인가'로 바꿔서 봅니다.
       (백분위: 업종에서 가장 좋으면 100점, 한가운데면 50점)
 
-    업종을 모르거나 같은 업종 종목이 너무 적으면(MIN_PEERS 미만)
-    이 방식을 쓸 수 없으므로 빈칸으로 두고, 부르는 쪽에서 절대 기준을 씁니다.
+    두 단계로 비교합니다
+      1) 자세한 업종(예: 반도체)에 회사가 MIN_PEERS 곳 이상이면 그걸로 비교
+      2) 부족하면 큰 묶음(예: 전자·통신장비)으로 비교
+      3) 그것도 부족하면 빈칸 → 부르는 쪽에서 절대 기준을 씁니다
     """
     out = pd.DataFrame(index=df.index)
-    sectors = df[sector_col].fillna("업종 미상")
-    sizes = sectors.map(sectors.value_counts())
-    usable = (sectors != "업종 미상") & (sizes >= MIN_PEERS)
+
+    fine = df[sector_col].fillna("업종 미상")
+    coarse = (df[group_col] if group_col in df.columns else fine).fillna("업종 미상")
+
+    fine_size = fine.map(fine.value_counts())
+    coarse_size = coarse.map(coarse.value_counts())
+
+    use_fine = (fine != "업종 미상") & (fine_size >= MIN_PEERS)
+    use_coarse = (~use_fine) & (coarse != "업종 미상") & (coarse_size >= MIN_PEERS)
+
+    pct_fine = _percentile_by(df, fine)
+    pct_coarse = _percentile_by(df, coarse)
 
     for m in METRICS:
-        values = pd.to_numeric(df[m.key], errors="coerce")
-        # 낮을수록 좋은 지표(부채비율·PER·PBR)는 부호를 뒤집어 줄을 세웁니다.
-        ranked_input = values if m.higher_is_better else -values
-        pct = ranked_input.groupby(sectors).rank(pct=True) * 100
-        pct = pct.where(usable)
-        out[f"점수_{m.label}"] = pct.round(1)
+        col = pct_fine[m.label].where(use_fine)
+        col = col.fillna(pct_coarse[m.label].where(use_coarse))
+        out[f"점수_{m.label}"] = col
 
-    out["업종비교가능"] = usable
-    out["업종내종목수"] = sizes
+    out["업종비교가능"] = use_fine | use_coarse
+    # 실제로 어떤 묶음으로 비교했는지 화면에 알려주기 위해 남겨둡니다.
+    out["비교기준업종"] = fine.where(use_fine, coarse.where(use_coarse))
+    out["업종내종목수"] = fine_size.where(use_fine, coarse_size.where(use_coarse))
     return out
 
 
@@ -212,6 +237,7 @@ def score_table(
             out[col] = rel[col].where(rel["업종비교가능"], out[col])
         out["업종비교적용"] = rel["업종비교가능"]
         out["업종내종목수"] = rel["업종내종목수"]
+        out["비교기준업종"] = rel["비교기준업종"]
 
     required = [f"점수_{m.label}" for m in METRICS if m.required]
     out["자료충분"] = out[required].notna().all(axis=1)

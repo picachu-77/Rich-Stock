@@ -15,6 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from src.db import get_conn
+from src.ksic import sector_group, sector_name
 
 # pandas 가 psycopg2 연결을 쓸 때 내는 안내 경고를 숨깁니다.
 warnings.filterwarnings(
@@ -75,7 +76,7 @@ def load_overview() -> pd.DataFrame:
          ORDER BY code, trade_date DESC
     )
     SELECT t.code, t.name, t.market, t.kind, t.is_active,
-           t.sector_name, t.ceo_name, t.est_date, t.homepage,
+           t.sector_code, t.sector_name, t.ceo_name, t.est_date, t.homepage,
            c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
            c.per, c.pbr, c.eps, c.bps, c.div_yield,
            f.roe, f.debt_ratio, f.op_margin, f.payout_ratio,
@@ -116,7 +117,20 @@ def load_overview() -> pd.DataFrame:
 
     # ── 회사 기본정보 (src/company_profile.py 가 채워 넣습니다) ──
     # 아직 한 번도 수집하지 않았다면 빈칸이며, 화면은 '정보 없음'으로 표시합니다.
-    df["업종"] = df["sector_name"].fillna("업종 미상") if "sector_name" in df else "업종 미상"
+    #
+    # 업종 이름은 저장된 '업종코드'로부터 화면에서 만듭니다.
+    # 이렇게 해두면 나중에 업종을 더 잘게 나누고 싶을 때 src/ksic.py 만 고치면 되고,
+    # DART 에서 다시 받아올 필요가 없습니다.
+    if "sector_code" in df:
+        df["업종"] = df["sector_code"].map(sector_name)
+        df["업종(큰묶음)"] = df["sector_code"].map(sector_group)
+        # 코드가 없고 예전에 저장된 이름만 있는 경우를 위한 대비책
+        if "sector_name" in df:
+            fallback = df["sector_name"].fillna("업종 미상")
+            df["업종"] = df["업종"].where(df["업종"] != "업종 미상", fallback)
+    else:
+        df["업종"] = "업종 미상"
+        df["업종(큰묶음)"] = "업종 미상"
     df["대표이사"] = df["ceo_name"] if "ceo_name" in df else None
     df["홈페이지"] = df["homepage"] if "homepage" in df else None
     if "est_date" in df:

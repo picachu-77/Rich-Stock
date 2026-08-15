@@ -72,6 +72,8 @@ st.markdown(
         background: #eff6ff; border: 1px solid #bfdbfe;
         border-radius: 999px; padding: .12rem .55rem; margin-right: .3rem;
       }
+      /* 업종 비교를 못 쓴 경우의 안내 태그는 눈에 덜 띄는 회색으로 */
+      .sector-tag.plain { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
       .link-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
       .link-row a {
         display: inline-block; text-decoration: none; font-weight: 700; font-size: .88rem;
@@ -222,11 +224,17 @@ ranked = scored[scored["자료충분"]].sort_values("총점", ascending=False)
 dropped = int((~scored["자료충분"]).sum())
 
 # 업종 안에서 몇 등인지도 함께 계산합니다.
-if "업종" in ranked.columns and not ranked.empty:
-    ranked["업종내순위"] = ranked.groupby("업종")["총점"].rank(
+# (점수를 매길 때 실제로 쓴 묶음을 기준으로 세어야 앞뒤가 맞습니다)
+if not ranked.empty and "업종" in ranked.columns:
+    basis = (
+        ranked["비교기준업종"].fillna(ranked["업종"])
+        if "비교기준업종" in ranked.columns else ranked["업종"]
+    )
+    ranked = ranked.assign(비교묶음=basis)
+    ranked["업종내순위"] = ranked.groupby("비교묶음")["총점"].rank(
         ascending=False, method="min"
     )
-    ranked["업종내총수"] = ranked.groupby("업종")["총점"].transform("count")
+    ranked["업종내총수"] = ranked.groupby("비교묶음")["총점"].transform("count")
 
 # ── 요약 ─────────────────────────────────────────────────────
 c1, c2, c3 = st.columns(3)
@@ -285,9 +293,20 @@ for i, row in top.iterrows():
     # 업종과 업종 내 순위를 함께 보여줍니다.
     sector = row.get("업종") or "업종 미상"
     tag = f"<span class='sector-tag'>{sector}</span>"
-    if pd.notna(row.get("업종내순위")) and sector != "업종 미상":
-        tag += (f"<span class='sector-tag'>업종 내 "
+
+    # 업종 비교가 실제로 적용된 종목에만 '업종 내 O위'를 붙입니다.
+    # (같은 업종 회사가 몇 곳뿐이라 공통 기준으로 점수를 매긴 종목에
+    #  '업종 내 1위'라고 적으면 오해를 주기 때문입니다)
+    applied_here = bool(row.get("업종비교적용")) and score_mode == "같은 업종 비교"
+    if applied_here and pd.notna(row.get("업종내순위")):
+        basis = row.get("비교묶음") or sector
+        # 자세한 업종에 회사가 적어 큰 묶음으로 비교했다면 그 이름을 함께 적습니다.
+        where = "업종 내" if basis == sector else f"{basis} 내"
+        tag += (f"<span class='sector-tag'>{where} "
                 f"{int(row['업종내순위'])}위 / {int(row['업종내총수'])}개</span>")
+    elif score_mode == "같은 업종 비교":
+        tag += ("<span class='sector-tag plain'>같은 업종 회사가 적어 "
+                "공통 기준으로 채점</span>")
 
     st.markdown(
         f"""
@@ -427,9 +446,12 @@ with st.expander("⚠️ 이 점수의 한계 (꼭 읽어보세요)", expanded=F
         "- **뉴스는 점수에 반영하지 않습니다.** 뉴스의 좋고 나쁨을 기계가 판정하면 "
         "오판이 잦아, 링크로만 연결했습니다. 큰 악재는 숫자에 나타나기 전에 "
         "뉴스에 먼저 나오므로 반드시 직접 확인하세요.\n"
-        "- **업종 분류가 거칩니다.** 표준산업분류 앞 두 자리로 묶어서 "
-        "'반도체'와 '전자부품'이 같은 업종으로 취급됩니다. 또 업종이 확인되지 않거나 "
-        f"같은 업종이 {MIN_PEERS}곳 미만이면 업종 비교를 적용하지 못합니다.\n"
+        "- **업종 분류의 한계.** 표준산업분류를 기준으로 '반도체 / 전지(배터리) / "
+        "게임 소프트웨어'처럼 잘게 나눠 비교하지만, 자세한 업종에 회사가 "
+        f"{MIN_PEERS}곳 미만이면 큰 묶음(예: 전자·통신장비)으로 비교하고, "
+        "그마저도 부족하면 공통 기준을 씁니다. 카드에 어떤 묶음으로 비교했는지 "
+        "표시되니 확인하세요. 또 한 회사가 여러 사업을 해도 대표 업종 하나로만 "
+        "분류됩니다.\n"
         "- **과거 숫자입니다.** 재무제표는 이미 지나간 실적이고, 주가는 앞날의 기대로 "
         "움직입니다. 점수가 높아도 앞으로 실적이 나빠질 수 있습니다.\n"
         "- **싼 데는 이유가 있을 수 있습니다.** PER·PBR이 낮아 점수가 높게 나온 회사가 "
