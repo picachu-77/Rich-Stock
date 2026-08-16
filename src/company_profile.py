@@ -90,6 +90,11 @@ def main() -> None:
 
     dart = DartClient()
 
+    # ★ 데이터베이스 연결은 '쓸 때만 잠깐' 엽니다 ★
+    #   DART 에서 2,600곳을 받아오는 데 30분 넘게 걸립니다.
+    #   그동안 연결을 열어두면 Neon 이 '노는 연결'로 보고 끊어버려서
+    #   막상 저장할 때 실패합니다. 그래서 읽기·저장 때만 잠깐씩 엽니다.
+    #   (기존 재무지표 수집기도 같은 방식입니다)
     with get_conn() as conn:
         # 우선주는 보통주와 같은 회사코드를 쓰므로 같은 정보가 채워집니다.
         where = "WHERE is_active = TRUE AND dart_corp_code IS NOT NULL"
@@ -100,60 +105,75 @@ def main() -> None:
             conn,
             f"SELECT code, name, dart_corp_code FROM ticker {where} ORDER BY code;",
         )
-        if args.limit > 0:
-            rows = rows[: args.limit]
 
-        total = len(rows)
-        if total == 0:
-            print("\n받아올 종목이 없습니다. (이미 다 받았거나 회사코드가 없습니다)")
-            print("회사코드가 없다면 먼저 `python -m src.dart_corpcode` 를 실행하세요.")
-            return
+    if args.limit > 0:
+        rows = rows[: args.limit]
 
-        print(f"\n대상 {total:,}곳 — DART 호출 {total:,}건 예정 (하루 한도 20,000건)")
+    total = len(rows)
+    if total == 0:
+        print("\n받아올 종목이 없습니다. (이미 다 받았거나 회사코드가 없습니다)")
+        print("회사코드가 없다면 먼저 `python -m src.dart_corpcode` 를 실행하세요.")
+        return
 
-        # 같은 회사코드를 여러 종목(보통주·우선주)이 함께 쓰므로,
-        # 회사코드당 한 번만 받아 API 호출을 아낍니다.
-        cache: dict[str, dict | None] = {}
-        saved_rows: list[tuple] = []
-        failed = 0
+    print(f"\n대상 {total:,}곳 — DART 호출 {total:,}건 예정 (하루 한도 20,000건)")
 
-        for i, (code, name, corp_code) in enumerate(rows, start=1):
-            if corp_code not in cache:
-                cache[corp_code] = fetch_profile(dart, corp_code)
+    UPDATE_SQL = """
+        UPDATE ticker AS t
+           SET sector_code = v.sector_code,
+               sector_name = v.sector_name,
+               ceo_name    = v.ceo_name,
+               est_date    = v.est_date::date,
+               homepage    = v.homepage,
+               profile_updated_at = now(),
+               updated_at  = now()
+          FROM (VALUES %s) AS v(code, sector_code, sector_name,
+                                ceo_name, est_date, homepage)
+         WHERE t.code = v.code;
+    """
 
-            info = cache[corp_code]
-            if info is None:
-                failed += 1
-            else:
-                saved_rows.append((
-                    code, info["sector_code"], info["sector_name"],
-                    info["ceo_name"], info["est_date"], info["homepage"],
-                ))
+    def flush(batch: list[tuple]) -> int:
+        """모아둔 것을 저장합니다. 저장할 때만 연결을 잠깐 엽니다."""
+        if not batch:
+            return 0
+        with get_conn() as conn:
+            return bulk_upsert(conn, UPDATE_SQL, batch)
 
-            if i % 200 == 0 or i == total:
-                print(f"  {i:,}/{total:,} 진행 "
-                      f"(성공 {len(saved_rows):,} · 실패 {failed:,} · "
-                      f"호출 {dart.calls:,}건)")
+    # 같은 회사코드를 여러 종목(보통주·우선주)이 함께 쓰므로,
+    # 회사코드당 한 번만 받아 API 호출을 아낍니다.
+    cache: dict[str, dict | None] = {}
+    batch: list[tuple] = []
+    saved = 0
+    ok = 0
+    failed = 0
 
-        print("\n종목 표에 저장하는 중...")
-        saved = bulk_upsert(
-            conn,
-            """
-            UPDATE ticker AS t
-               SET sector_code = v.sector_code,
-                   sector_name = v.sector_name,
-                   ceo_name    = v.ceo_name,
-                   est_date    = v.est_date::date,
-                   homepage    = v.homepage,
-                   profile_updated_at = now(),
-                   updated_at  = now()
-              FROM (VALUES %s) AS v(code, sector_code, sector_name,
-                                    ceo_name, est_date, homepage)
-             WHERE t.code = v.code;
-            """,
-            saved_rows,
-        )
+    for i, (code, name, corp_code) in enumerate(rows, start=1):
+        if corp_code not in cache:
+            cache[corp_code] = fetch_profile(dart, corp_code)
 
+        info = cache[corp_code]
+        if info is None:
+            failed += 1
+        else:
+            ok += 1
+            batch.append((
+                code, info["sector_code"], info["sector_name"],
+                info["ceo_name"], info["est_date"], info["homepage"],
+            ))
+
+        # 300곳마다 중간 저장합니다.
+        # 중간에 멈추더라도 여기까지는 남으므로, 다시 실행하면 이어서 받습니다.
+        if len(batch) >= 300:
+            saved += flush(batch)
+            batch = []
+
+        if i % 200 == 0 or i == total:
+            print(f"  {i:,}/{total:,} 진행 "
+                  f"(성공 {ok:,} · 실패 {failed:,} · 저장 {saved:,} · "
+                  f"호출 {dart.calls:,}건)", flush=True)
+
+    saved += flush(batch)
+
+    with get_conn() as conn:
         stats = fetch_all(
             conn,
             """
@@ -166,7 +186,7 @@ def main() -> None:
             """,
         )
 
-    print(f"  {saved:,}건 저장 완료 (실패 {failed:,}건)")
+    print(f"\n  {saved:,}건 저장 완료 (실패 {failed:,}건)")
     print("\n업종별 종목 수 (상위 10)")
     for sector, cnt in stats:
         print(f"  {sector:<20} {cnt:>5,}개")

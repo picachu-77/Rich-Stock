@@ -92,21 +92,6 @@ jobs:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
         run: python -m src.dart_corpcode
 
-      # 회사 업종·대표이사·설립일을 받아옵니다.
-      # (우량주 찾기 화면에서 '같은 업종끼리 비교'에 씁니다)
-      # 평소에는 아직 정보가 없는 종목만 받아 호출이 몇 건뿐이고,
-      # refresh_profile 을 켜면 전체를 다시 받습니다(약 2,600건).
-      - name: 회사 기본정보(업종·대표이사) 수집
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DART_API_KEY: ${{ secrets.DART_API_KEY }}
-        run: |
-          if [ "${{ github.event.inputs.refresh_profile }}" = "true" ]; then
-            python -m src.company_profile --all
-          else
-            python -m src.company_profile
-          fi
-
       - name: 재무지표 수집
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -123,6 +108,28 @@ jobs:
             python -m src.financial_collect --years 3 $DIV_FLAG
           else
             python -m src.financial_collect --latest $DIV_FLAG
+          fi
+
+      # 회사 업종·대표이사·설립일을 받아옵니다.
+      # (우량주 찾기 화면에서 '같은 업종끼리 비교'에 씁니다)
+      #
+      # ★ 순서와 continue-on-error 에 대해 ★
+      #   이 작업은 회사가 많으면 30분 넘게 걸립니다. 그래서
+      #   (1) 더 중요한 재무지표를 먼저 받고 나서 실행하고,
+      #   (2) 여기서 실패하더라도 앞 단계 결과는 그대로 남도록
+      #       continue-on-error 로 두었습니다.
+      #   중간중간 저장하므로 실패해도 받은 데까지는 남고,
+      #   다음에 다시 실행하면 못 받은 곳부터 이어서 받습니다.
+      - name: 회사 기본정보(업종·대표이사) 수집
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.refresh_profile }}" = "true" ]; then
+            python -m src.company_profile --all
+          else
+            python -m src.company_profile
           fi
 
       - name: 실패 시 안내
