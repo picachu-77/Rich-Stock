@@ -256,7 +256,7 @@ if df.empty:
 # 아래쪽 '필터 초기화' 버튼이 이 이름표들을 지워서 처음 상태로 되돌립니다.
 FILTER_KEYS = [
     "f_kw", "f_kinds", "f_markets", "f_price", "f_cap", "f_vol", "f_chg",
-    "f_retp", "f_ret", "f_per", "f_roe", "f_debt", "f_fin", "f_sort",
+    "f_retp", "f_ret", "f_per", "f_roe", "f_debt", "f_fin", "f_sortcol",
 ]
 
 with st.sidebar:
@@ -269,28 +269,10 @@ with st.sidebar:
         help="여러 단어를 띄어쓰기로 넣으면 그중 하나라도 맞는 종목을 찾습니다.",
     )
 
-    # 정렬은 가장 자주 바꾸는 항목이라 접지 않고 항상 보이게 둡니다.
-    # '무엇을 크게/작게 볼지'를 이름으로 고르게 했습니다.
-    SORT_PRESETS: dict[str, tuple[str, bool]] = {
-        "시가총액 큰 순": ("시가총액(억)", False),
-        "등락률 높은 순": ("등락률(%)", False),
-        "등락률 낮은 순": ("등락률(%)", True),
-        "거래량 많은 순": ("거래량", False),
-        "PER 낮은 순 (저평가)": ("PER", True),
-        "PBR 낮은 순 (저평가)": ("PBR", True),
-        "배당수익률 높은 순": ("배당수익률(%)", False),
-        "ROE 높은 순 (돈 잘 버는)": ("ROE(%)", False),
-        "부채비율 낮은 순 (안전한)": ("부채비율(%)", True),
-        "영업이익률 높은 순": ("영업이익률(%)", False),
-        **{f"수익률 {p} 높은 순": (f"수익률 {p}(%)", False) for p in PERIODS},
-        **{f"수익률 {p} 낮은 순": (f"수익률 {p}(%)", True) for p in PERIODS},
-    }
-    sort_label = st.selectbox(
-        "↕️ 정렬 기준", list(SORT_PRESETS.keys()), index=0, key="f_sort"
+    st.caption(
+        "정렬은 **📋 종목 목록** 위쪽에서 고를 수 있습니다. "
+        "아래 항목을 눌러 펼치면 조건을 더 자세히 걸 수 있습니다."
     )
-    sort_col, ascending = SORT_PRESETS[sort_label]
-
-    st.caption("아래 항목을 눌러 펼치면 조건을 더 자세히 걸 수 있습니다.")
 
     # ── 접이식 카드 ①: 종류 · 시장 ──
     with st.expander("🏷️ 종류 · 시장", expanded=False):
@@ -389,6 +371,9 @@ with st.sidebar:
     if b1.button("↩️ 필터 초기화", width="stretch", help="모든 조건을 처음 상태로"):
         for k in FILTER_KEYS:
             st.session_state.pop(k, None)
+        # 정렬 방향은 기준마다 따로 기억하므로 한꺼번에 지웁니다.
+        for k in [k for k in st.session_state if str(k).startswith("f_sortdir_")]:
+            st.session_state.pop(k, None)
         st.rerun()
     if b2.button("🔄 새로 읽기", width="stretch", help="최신 데이터를 다시 불러옵니다"):
         st.cache_data.clear()
@@ -443,17 +428,14 @@ if debt_max > 0:
 if only_with_fin:
     view = view[view["ROE(%)"].notna() | view["부채비율(%)"].notna()]
 
-view = view.sort_values(sort_col, ascending=ascending, na_position="last")
-
 display_cols = (
     ["종목코드", "종목명", "시장", "종류", "종가", "등락률(%)", "거래량", "시가총액(억)"]
     + ["PER", "PBR", "배당수익률(%)"]
     + ["ROE(%)", "부채비율(%)", "영업이익률(%)"]
     + RETURN_COLS
 )
-table = view[display_cols].reset_index(drop=True)
 
-if table.empty:
+if view.empty:
     st.warning("조건에 맞는 종목이 없습니다. 왼쪽 필터를 조금 넓혀 보세요.")
     st.stop()
 
@@ -463,7 +445,54 @@ if table.empty:
 tab_list, tab_chart, tab_fin = st.tabs(["📋 종목 목록", "📊 차트", "🏦 재무"])
 
 with tab_list:
-    st.subheader(f"종목 목록  ({len(table):,}개)")
+    st.subheader(f"종목 목록  ({len(view):,}개)")
+
+    # ── 정렬: 무엇을 기준으로, 높은 순인지 낮은 순인지 ──
+    # 목록 바로 위에 두어 휴대폰에서도 바로 보이고 바꾸기 쉽게 했습니다.
+    SORT_COLUMNS: dict[str, str] = {
+        "시가총액": "시가총액(억)",
+        "등락률": "등락률(%)",
+        "거래량": "거래량",
+        "종가": "종가",
+        "PER (주가수익비율)": "PER",
+        "PBR (주가순자산비율)": "PBR",
+        "배당수익률": "배당수익률(%)",
+        "ROE (자기자본이익률)": "ROE(%)",
+        "부채비율": "부채비율(%)",
+        "영업이익률": "영업이익률(%)",
+        **{f"수익률 {p}": f"수익률 {p}(%)" for p in PERIODS},
+    }
+    # 이 지표들은 '낮을수록 좋다'고 보는 것이 일반적이라 기본을 낮은 순으로 둡니다.
+    LOWER_IS_BETTER = {"PER", "PBR", "부채비율(%)"}
+
+    s1, s2 = st.columns([3, 2])
+    sort_name = s1.selectbox(
+        "↕️ 정렬 기준", list(SORT_COLUMNS.keys()), index=0, key="f_sortcol",
+        help="이 항목을 기준으로 목록을 줄 세웁니다.",
+    )
+    sort_col = SORT_COLUMNS[sort_name]
+
+    default_dir = 1 if sort_col in LOWER_IS_BETTER else 0
+    direction = s2.radio(
+        "순서",
+        ["높은 순 ↓", "낮은 순 ↑"],
+        index=default_dir,
+        horizontal=True,
+        key=f"f_sortdir_{sort_col}",
+        help="PER·PBR·부채비율은 낮을수록 좋다고 보는 것이 일반적이라 "
+             "기본이 낮은 순입니다.",
+    )
+    ascending = direction.startswith("낮은")
+
+    # 값이 없는 종목(빈칸)은 항상 맨 뒤로 보냅니다.
+    view = view.sort_values(sort_col, ascending=ascending, na_position="last")
+    table = view[display_cols].reset_index(drop=True)
+
+    st.caption(
+        f"**{sort_name}** {'낮은' if ascending else '높은'} 순으로 정렬했습니다. "
+        f"1위 **{table.iloc[0]['종목명']}** "
+        f"({'—' if pd.isna(table.iloc[0][sort_col]) else f'{float(table.iloc[0][sort_col]):,.2f}'})"
+    )
 
     # '종목 선택' 칸의 자리를 목록 위에 미리 잡아둡니다.
     # (휴대폰에서 카드 40장을 지나 맨 아래까지 내려가지 않아도 되도록,

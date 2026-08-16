@@ -265,9 +265,40 @@ if ranked.empty:
     )
     st.stop()
 
+# ── 정렬: 총점 말고 특정 지표로도 줄 세울 수 있게 합니다 ──────
+SORT_OPTIONS: dict[str, str] = {
+    "총점": "총점",
+    **{f"{g} 점수": f"묶음_{g}" for g in GROUPS},
+    **{m.label: m.key for m in METRICS},
+    "시가총액": "시가총액(억)",
+    "등락률": "등락률(%)",
+}
+# 낮을수록 좋다고 보는 지표는 기본을 낮은 순으로 둡니다.
+LOWER_IS_BETTER = {m.key for m in METRICS if not m.higher_is_better}
+
+s1, s2 = st.columns([3, 2])
+sort_name = s1.selectbox(
+    "↕️ 정렬 기준", list(SORT_OPTIONS.keys()), index=0,
+    help="총점 대신 'ROE' 나 '배당수익률' 처럼 특정 지표로 줄 세울 수 있습니다.",
+)
+sort_col = SORT_OPTIONS[sort_name]
+
+direction = s2.radio(
+    "순서", ["높은 순 ↓", "낮은 순 ↑"],
+    index=1 if sort_col in LOWER_IS_BETTER else 0,
+    horizontal=True,
+    key=f"rank_dir_{sort_col}",
+    help="PER·PBR·부채비율은 낮을수록 좋다고 보아 기본이 낮은 순입니다.",
+)
+asc = direction.startswith("낮은")
+
+if sort_col in ranked.columns:
+    ranked = ranked.sort_values(sort_col, ascending=asc, na_position="last")
+
 st.caption(
-    f"아래는 위 기준으로 점수가 높은 순서입니다. 각 회사의 **‘근거 자세히 보기’**를 열면 "
-    "지표별 값과 점수, 그리고 그 뜻을 볼 수 있습니다."
+    f"**{sort_name}** {'낮은' if asc else '높은'} 순으로 정렬했습니다. "
+    "각 회사의 **근거 자세히 보기**를 열면 지표별 값과 점수, 그 뜻을 볼 수 있습니다. "
+    "왼쪽 숫자는 지금 정렬 기준에서의 순서입니다."
 )
 
 top = ranked.head(top_n).reset_index(drop=True)
