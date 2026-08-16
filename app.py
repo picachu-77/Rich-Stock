@@ -21,7 +21,14 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.db import get_conn
-from src.market_data import PERIODS, RETURN_COLS, load_overview
+from src.market_data import (
+    PERIODS,
+    RETURN_COLS,
+    load_52w,
+    load_overview,
+    load_track_record,
+)
+from src.risk import FLAGS, add_flags, badges_html
 from src.ui_korean import apply_korean_ui
 from src.ui_style import apply_style, mobile_sidebar_button
 
@@ -120,6 +127,32 @@ def _num(value, unit: str = "", digits: int = 0) -> str:
     return f"{float(value):,.{digits}f}{unit}"
 
 
+def w52_bar(r: pd.Series) -> str:
+    """
+    최근 1년 주가 범위에서 지금이 어디쯤인지 막대로 보여줍니다.
+
+    왜 필요한가요?
+      '많이 떨어졌으니 싸다'는 판단은 위험합니다. 지금 값이 1년 범위의
+      어디쯤인지, 고점에서 얼마나 내려왔는지를 함께 봐야 판단이 됩니다.
+    """
+    pos = r.get("52주위치(%)")
+    if pd.isna(pos):
+        return ""
+    pos = max(0.0, min(100.0, float(pos)))
+    drop = r.get("고점대비(%)")
+    drop_txt = "" if pd.isna(drop) else f"고점 대비 {float(drop):+.0f}%"
+    return (
+        "<div class='w52'>"
+        f"<div class='w52-head'><span>52주 위치 {pos:.0f}%</span>"
+        f"<span>{drop_txt}</span></div>"
+        "<div class='w52-bar'>"
+        f"<div class='w52-dot' style='left:{pos:.0f}%'></div></div>"
+        f"<div class='w52-ends'><span>저 {_num(r.get('52주최저'), '원')}</span>"
+        f"<span>고 {_num(r.get('52주최고'), '원')}</span></div>"
+        "</div>"
+    )
+
+
 def make_stock_cards(table: pd.DataFrame, limit: int = 40) -> str:
     """
     휴대폰용 '종목 카드' 목록을 만듭니다.
@@ -163,6 +196,8 @@ def make_stock_cards(table: pd.DataFrame, limit: int = 40) -> str:
                 <div>부채비율 <b>{_num(r['부채비율(%)'], '%', 0)}</b></div>
                 <div>1년 수익률 <b class="{ret_cls}">{ret_txt}</b></div>
               </div>
+              {w52_bar(r)}
+              <div class="sc-risk">{badges_html(r.get('위험신호'))}</div>
             </div>
             """
         )
@@ -247,6 +282,37 @@ df = load_overview()
 if df.empty:
     st.warning("최근 30일 내 시세가 없습니다. 수집기를 다시 실행해 주세요.")
     st.stop()
+
+# ── 실적 이력과 52주 최고·최저를 붙입니다 ─────────────────────
+# (위험 신호 판단과 '1년 범위 어디쯤인지' 표시에 씁니다)
+track = load_track_record()
+if not track.empty:
+    df = df.merge(track, on="종목코드", how="left")
+else:
+    for col in ["흑자비율(%)", "최근자본", "최근순이익"]:
+        df[col] = pd.NA
+
+w52 = load_52w()
+if not w52.empty:
+    df = df.merge(w52, on="종목코드", how="left")
+else:
+    df["52주최고"] = pd.NA
+    df["52주최저"] = pd.NA
+
+close = df["종가"].astype("Float64")
+high = df["52주최고"].astype("Float64")
+low = df["52주최저"].astype("Float64")
+
+# 고점 대비 얼마나 내려왔는지 (0% = 신고가, -50% = 고점의 반값)
+df["고점대비(%)"] = ((close / high - 1) * 100).round(1).astype("Float64")
+# 1년 범위에서 지금 위치 (0% = 최저가, 100% = 최고가)
+span = (high - low)
+df["52주위치(%)"] = (
+    ((close - low) / span.where(span > 0) * 100).round(0).astype("Float64")
+)
+
+# 위험 신호 (자본잠식·적자·빚 과다·거래 부족 등) → src/risk.py
+df = add_flags(df)
 
 # ── 왼쪽 사이드바: 검색 및 필터 ────────────────────────────────
 # 필터가 많으면 화면이 길어져 찾기 어려우므로, 주제별로 '접이식 카드'에 넣었습니다.
@@ -429,7 +495,8 @@ if only_with_fin:
     view = view[view["ROE(%)"].notna() | view["부채비율(%)"].notna()]
 
 display_cols = (
-    ["종목코드", "종목명", "시장", "종류", "종가", "등락률(%)", "거래량", "시가총액(억)"]
+    ["종목코드", "종목명", "시장", "종류", "종가", "등락률(%)", "고점대비(%)",
+     "거래량", "시가총액(억)"]
     + ["PER", "PBR", "배당수익률(%)"]
     + ["ROE(%)", "부채비율(%)", "영업이익률(%)"]
     + RETURN_COLS
@@ -452,6 +519,8 @@ with tab_list:
     SORT_COLUMNS: dict[str, str] = {
         "시가총액": "시가총액(억)",
         "등락률": "등락률(%)",
+        "고점대비 (52주 최고 대비)": "고점대비(%)",
+        "52주 위치": "52주위치(%)",
         "거래량": "거래량",
         "종가": "종가",
         "PER (주가수익비율)": "PER",
@@ -502,7 +571,7 @@ with tab_list:
     # ── 휴대폰: 카드 목록 (옆으로 밀 필요 없음) ──
     # st.container(key="only_mobile") 안에 넣으면 휴대폰에서만 보입니다. → src/ui_style.py
     with st.container(key="only_mobile"):
-        st.markdown(make_stock_cards(table), unsafe_allow_html=True)
+        st.markdown(make_stock_cards(view), unsafe_allow_html=True)
         if len(table) > 40:
             st.caption(
                 f"조건에 맞는 {len(table):,}개 중 앞의 40개만 카드로 보여줍니다. "
@@ -535,6 +604,12 @@ with tab_list:
                     help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
                 ),
                 "등락률(%)": st.column_config.NumberColumn("등락률(%)", format="localized"),
+                "고점대비(%)": st.column_config.NumberColumn(
+                    "고점대비(%)", format="localized",
+                    help="최근 1년 최고가 대비 지금 주가가 몇 % 떨어져 있는지. "
+                         "0 에 가까우면 1년 중 가장 비싼 구간입니다. "
+                         "많이 떨어졌다고 싼 것은 아니니 이유를 꼭 확인하세요.",
+                ),
                 "PER": st.column_config.NumberColumn(
                     "PER", format="localized",
                     help="주가수익비율 = 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 쌉니다. "
@@ -601,6 +676,10 @@ with tab_list:
 row = table[table["종목코드"] == code].iloc[0]
 name = row["종목명"]
 
+# 위험 신호·52주 값은 표(table)에 없는 칸이라 원본(view)에서 따로 가져옵니다.
+_full = view[view["종목코드"] == code]
+row_full = _full.iloc[0] if not _full.empty else None
+
 # 고른 종목이 무엇인지 탭마다 위에 다시 보여줍니다 (탭을 옮겨도 헷갈리지 않게).
 detail_bits = [str(row["시장"]), str(row["종류"])]
 if pd.notna(row["종가"]):
@@ -614,6 +693,28 @@ hist = load_history(code)
 # ── 차트 탭 ──────────────────────────────────────────────────
 with tab_chart:
     st.markdown(headline)
+
+    # ── 이 종목에 붙은 위험 신호를 먼저 보여줍니다 ──
+    # (차트를 보기 전에 '조심할 점'을 먼저 알리는 것이 순서상 맞습니다)
+    flags = row_full.get("위험신호") if row_full is not None else None
+    if isinstance(flags, (list, tuple)) and flags:
+        st.markdown(
+            f"<div class='risk-box'>{badges_html(flags)}</div>",
+            unsafe_allow_html=True,
+        )
+        with st.expander("⚠️ 이 신호들이 무슨 뜻인가요?", expanded=False):
+            for label in flags:
+                flag = next((f for f in FLAGS.values() if f.label == label), None)
+                if flag:
+                    st.markdown(f"**{flag.label}** ({flag.level}) — {flag.why}")
+            st.caption(
+                "이 신호는 '사지 말라'는 뜻이 아니라 '사기 전에 이유를 꼭 "
+                "확인하라'는 표시입니다. 반대로 신호가 없다고 안전하다는 뜻도 아닙니다."
+            )
+
+    # ── 최근 1년 어디쯤인지 ──
+    if row_full is not None and pd.notna(row_full.get("52주위치(%)")):
+        st.markdown(w52_bar(row_full), unsafe_allow_html=True)
 
     if hist.empty:
         st.warning("이 종목의 과거 시세가 아직 없습니다.")

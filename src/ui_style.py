@@ -148,6 +148,35 @@ _CSS = """
   .up   { color: var(--up)   !important; }
   .down { color: var(--down) !important; }
 
+  /* ── 8-2. 위험 신호 딱지 ───────────────────────────────────── */
+  .risk-badge {
+    display: inline-block; font-size: .74rem; font-weight: 800;
+    border-radius: 999px; padding: .12rem .5rem; margin: .15rem .25rem 0 0;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .risk-badge.danger { color: #b42318; background: #fef3f2; border-color: #fecdca; }
+  .risk-badge.warn   { color: #b54708; background: #fffaeb; border-color: #fedf89; }
+  .stock-card .sc-risk:empty { display: none; }
+  .risk-box { margin: .3rem 0 .6rem 0; }
+
+  /* ── 8-3. 52주 위치 막대 ───────────────────────────────────── */
+  .w52 { margin: .5rem 0 .1rem 0; }
+  .w52-head, .w52-ends {
+    display: flex; justify-content: space-between;
+    font-size: .78rem; color: var(--ink-soft); font-weight: 600;
+  }
+  .w52-head { margin-bottom: .2rem; }
+  .w52-ends { margin-top: .15rem; }
+  .w52-bar {
+    position: relative; height: 8px; border-radius: 999px;
+    background: linear-gradient(90deg, #dbeafe 0%, #e2e8f0 50%, #fee4e2 100%);
+  }
+  .w52-dot {
+    position: absolute; top: -3px; width: 14px; height: 14px; margin-left: -7px;
+    border-radius: 50%; background: #0f172a; border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,.35);
+  }
+
   /* ── 9. 기기별로 하나만 보여주기 ───────────────────────────── */
   .st-key-only_mobile { display: none; }          /* 기본(컴퓨터): 휴대폰용 감춤 */
 

@@ -237,7 +237,12 @@ def load_track_record(quarters: int = 8) -> pd.DataFrame:
            (array_agg(revenue ORDER BY rn ASC)
                 FILTER (WHERE revenue IS NOT NULL))[1]    AS "최근매출",
            (array_agg(revenue ORDER BY rn DESC)
-                FILTER (WHERE revenue IS NOT NULL))[1]    AS "과거매출"
+                FILTER (WHERE revenue IS NOT NULL))[1]    AS "과거매출",
+           -- 위험 신호 판단에 쓰는 값들 (가장 최근 보고서 기준)
+           (array_agg(total_equity ORDER BY rn ASC)
+                FILTER (WHERE total_equity IS NOT NULL))[1] AS "최근자본",
+           (array_agg(net_income ORDER BY rn ASC)
+                FILTER (WHERE net_income IS NOT NULL))[1]   AS "최근순이익"
       FROM picked
      GROUP BY code;
     """
@@ -248,7 +253,7 @@ def load_track_record(quarters: int = 8) -> pd.DataFrame:
         # 재무 이력이 없어도 나머지 화면은 정상 동작해야 합니다.
         return pd.DataFrame(
             columns=["종목코드", "보고서수", "흑자분기수", "흑자비율(%)",
-                     "매출성장(%)", "배당지속"]
+                     "매출성장(%)", "배당지속", "최근자본", "최근순이익"]
         )
 
     if df.empty:
@@ -268,4 +273,40 @@ def load_track_record(quarters: int = 8) -> pd.DataFrame:
     for col in ["흑자비율(%)", "매출성장(%)"]:
         df[col] = df[col].astype("Float64")
     return df[["종목코드", "보고서수", "흑자분기수", "흑자비율(%)",
-               "매출성장(%)", "배당지속"]]
+               "매출성장(%)", "배당지속", "최근자본", "최근순이익"]]
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_52w() -> pd.DataFrame:
+    """
+    종목별 '최근 1년(52주) 최고가·최저가'를 한 번에 가져옵니다.
+
+    왜 필요한가요?
+      지금 주가가 1년 범위의 어디쯤인지 알아야 '많이 떨어졌으니 싸다'는
+      착각을 피할 수 있습니다. 고점 대비 얼마나 내려왔는지, 바닥 근처인지
+      꼭대기 근처인지를 한눈에 보기 위한 값입니다.
+    """
+    sql = """
+    WITH bound AS (
+        SELECT max(trade_date) AS last_d FROM daily_price
+    )
+    SELECT p.code,
+           max(p.close) AS "52주최고",
+           min(p.close) AS "52주최저"
+      FROM daily_price p, bound b
+     WHERE p.trade_date >= b.last_d - INTERVAL '1 year'
+       AND p.close IS NOT NULL
+     GROUP BY p.code;
+    """
+    try:
+        with get_conn() as conn:
+            df = pd.read_sql(sql, conn)
+    except Exception:  # noqa: BLE001
+        return pd.DataFrame(columns=["종목코드", "52주최고", "52주최저"])
+
+    if df.empty:
+        return df
+    df.rename(columns={"code": "종목코드"}, inplace=True)
+    for c in ["52주최고", "52주최저"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype("Float64")
+    return df

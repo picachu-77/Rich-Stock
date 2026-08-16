@@ -28,6 +28,7 @@ from src.scoring import (
     score_table,
     summary_sentence,
 )
+from src.risk import FLAGS, add_flags, badges_html
 from src.ui_korean import apply_korean_ui
 from src.ui_style import apply_style, mobile_sidebar_button
 
@@ -60,6 +61,8 @@ st.markdown(
       .rank-code { color: #64748b; font-size: .8rem; font-weight: 600; }
       .rank-total { margin-left: auto; font-weight: 800; font-size: 1.25rem; color: #2563eb; }
       .rank-total span { font-size: .8rem; color: #64748b; font-weight: 600; }
+      .rank-risk:empty { display: none; }
+      .rank-risk { margin-top: .45rem; }
       .rank-sum { margin-top: .5rem; line-height: 1.75; font-size: .95rem; }
       .bar-wrap { display: flex; align-items: center; gap: .5rem; margin: .18rem 0; font-size: .85rem; }
       .bar-label { min-width: 52px; color: #475569; font-weight: 700; }
@@ -128,6 +131,9 @@ if not track.empty:
 else:
     for col in ["흑자비율(%)", "매출성장(%)", "흑자분기수", "보고서수", "배당지속"]:
         df[col] = pd.NA
+
+# 위험 신호(자본잠식·적자·빚 과다·거래 부족 등)를 붙입니다. → src/risk.py
+df = add_flags(df)
 
 # 업종 정보를 아직 한 번도 수집하지 않았다면 알려줍니다.
 has_sector = (df["업종"] != "업종 미상").any()
@@ -351,6 +357,7 @@ for i, row in top.iterrows():
           <div class="sector-row">{tag}</div>
           {''.join(bar(g, row[f'묶음_{g}']) for g in GROUPS)}
           <div class="rank-sum">{summary_sentence(row)}</div>
+          <div class="rank-risk">{badges_html(row.get('위험신호'))}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -444,6 +451,55 @@ for i, row in top.iterrows():
                         key=f"cmp_{row['종목코드']}")
 
 st.divider()
+
+with st.expander(f"🚫 순위에서 빠진 종목 보기 ({dropped:,}개)", expanded=False):
+    st.markdown(
+        "아래 종목들은 **핵심 지표(ROE·부채비율·PER·PBR) 중 하나 이상이 없어** "
+        "점수를 매기지 못한 종목입니다. 대부분 **이익을 내지 못해 PER 을 계산할 수 "
+        "없는 회사**이거나, 아직 재무 자료가 모이지 않은 회사입니다.\n\n"
+        "**나쁜 회사라는 뜻은 아니지만**, 순위에 없다고 해서 문제가 없는 것도 "
+        "아닙니다. 다른 곳에서 이 종목을 보게 되면 아래 신호를 참고하세요."
+    )
+    missing = scored[~scored["자료충분"]].copy()
+    if missing.empty:
+        st.caption("빠진 종목이 없습니다.")
+    else:
+        missing["없는 지표"] = [
+            ", ".join(
+                m.label for m in METRICS
+                if m.required and pd.isna(r.get(f"점수_{m.label}"))
+            )
+            for _, r in missing.iterrows()
+        ]
+        missing["위험 신호"] = [
+            ", ".join(v) if isinstance(v, (list, tuple)) and v else "—"
+            for v in missing.get("위험신호", pd.Series([None] * len(missing)))
+        ]
+        show = missing[["종목명", "종목코드", "시장", "업종", "종가",
+                        "시가총액(억)", "없는 지표", "위험 신호"]]
+        st.dataframe(
+            show.sort_values("시가총액(억)", ascending=False).head(200),
+            width="stretch", hide_index=True,
+            column_config={
+                "종가": st.column_config.NumberColumn(format="localized"),
+                "시가총액(억)": st.column_config.NumberColumn(format="localized"),
+            },
+        )
+        if len(missing) > 200:
+            st.caption(f"{len(missing):,}개 중 시가총액이 큰 200개만 보여줍니다.")
+
+with st.expander("⚠️ 위험 신호는 어떤 뜻인가요?", expanded=False):
+    st.markdown(
+        "순위 카드에 붙는 빨간·주황 딱지의 뜻입니다. "
+        "**사지 말라는 뜻이 아니라, 사기 전에 이유를 꼭 확인하라는 표시**입니다."
+    )
+    st.dataframe(
+        pd.DataFrame([
+            {"신호": f.label, "수준": f.level, "무슨 뜻인가요": f.why}
+            for f in FLAGS.values()
+        ]),
+        width="stretch", hide_index=True,
+    )
 
 with st.expander("📏 점수를 어떻게 매기나요? (기준 전부 보기)", expanded=False):
     st.markdown(
