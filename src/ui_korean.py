@@ -129,6 +129,41 @@ _SCRIPT = """
 """
 
 
+def josa(word: str, pair: str) -> str:
+    """
+    앞말에 맞는 조사를 붙여 돌려줍니다.
+
+    한국어는 앞 글자에 받침이 있느냐에 따라 조사가 달라집니다.
+        받침 있음: 삼성전자'와'  ← '자' 는 받침 없음 → '와'
+        받침 있음: 한국전력'과'  ← '력' 은 받침 있음 → '과'
+    종목명은 회사마다 끝 글자가 달라서, 하나로 고정해 두면 어색한 문장이
+    나옵니다. 그래서 글자를 보고 골라 붙입니다.
+
+    쓰는 법
+        josa("삼성전자", "과/와")  →  "삼성전자와"
+        josa("한국전력", "은/는")  →  "한국전력은"
+
+    pair 는 '받침 있을 때/받침 없을 때' 순서로 적습니다.
+    """
+    with_batchim, without_batchim = pair.split("/")
+
+    if not word:
+        return word + with_batchim
+
+    last = word[-1]
+    # 한글 음절인지 확인합니다 (영어·숫자로 끝나면 판단할 수 없습니다).
+    if "가" <= last <= "힣":
+        has_batchim = (ord(last) - 0xAC00) % 28 != 0
+    elif last.isdigit():
+        # 숫자는 읽는 소리를 기준으로 합니다 (0·1·3·6·7·8 은 받침이 있습니다)
+        has_batchim = last in "013678"
+    else:
+        # 알 수 없으면 받침이 있는 쪽으로 둡니다 (보통 더 자연스럽습니다).
+        has_batchim = True
+
+    return word + (with_batchim if has_batchim else without_batchim)
+
+
 def apply_korean_ui() -> None:
     """Streamlit 기본 UI 의 영어 글자를 한글로 바꿉니다. app.py 맨 위에서 한 번 호출하세요."""
     components.html(
