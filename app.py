@@ -40,6 +40,7 @@ from src.market_data import (
     load_track_record,
 )
 from src.risk import FLAGS, add_flags, badges_html
+from src.search import search
 from src.valuation import (
     BAND_METRICS,
     band_figure,
@@ -317,15 +318,19 @@ with st.sidebar:
     st.header("🔎 검색 · 필터")
 
     keyword = st.text_input(
-        "종목명 · 종목코드 검색",
+        "이름으로 목록 좁히기",
         placeholder="예: 삼성, KODEX, 005930",
         key="f_kw",
-        help="여러 단어를 띄어쓰기로 넣으면 그중 하나라도 맞는 종목을 찾습니다.",
+        help="여기는 **목록을 좁히는** 칸입니다. 여러 단어를 띄어쓰기로 넣으면 "
+             "그중 하나라도 맞는 종목만 남습니다.\n\n"
+             "종목 하나만 찾아 바로 보고 싶다면, 화면 위쪽의 "
+             "**🔎 종목 바로 찾기** 를 쓰시는 편이 빠릅니다.",
     )
 
     st.caption(
-        "정렬은 **📋 종목 목록** 위쪽에서 고를 수 있습니다. "
-        "아래 항목을 눌러 펼치면 조건을 더 자세히 걸 수 있습니다."
+        "종목 하나만 찾으시려면 화면 위쪽 **🔎 종목 바로 찾기** 를 쓰세요. "
+        "여기 조건들은 **목록 전체를 좁힐 때** 씁니다. "
+        "정렬은 **📋 종목 목록** 위쪽에 있습니다."
     )
 
     # ── 접이식 카드 ①: 종류 · 시장 ──
@@ -494,6 +499,56 @@ if view.empty:
     st.warning("조건에 맞는 종목이 없습니다. 왼쪽 필터를 조금 넓혀 보세요.")
     st.stop()
 
+# ── 종목 바로 찾기 ───────────────────────────────────────────
+# 사이드바 검색은 '목록을 좁히는' 기능이라, 휴대폰에서는 ☰ 필터를 열어야
+# 보입니다. 하지만 대부분은 "이 종목 하나만 보고 싶다" 입니다.
+# 그래서 화면 맨 위에 항상 보이는 검색칸을 따로 뒀습니다.
+#
+# ★ 필터에 걸려 목록에서 빠진 종목도 여기서는 찾을 수 있습니다 ★
+#   전체 종목(df)에서 찾기 때문입니다. 필터를 풀지 않아도 됩니다.
+st.markdown("#### 🔎 종목 바로 찾기")
+
+jump_query = st.text_input(
+    "종목 바로 찾기",
+    key="q_jump",
+    placeholder="이름 · 종목코드 · 초성으로 찾기   (예: 삼성전자, 005930, ㅅㅅㅈㅈ)",
+    label_visibility="collapsed",
+)
+
+
+def _jump_to(code: str) -> None:
+    """검색 결과를 누르면 그 종목을 '지금 보는 종목' 으로 정합니다."""
+    st.session_state["sel_code"] = code
+    # 표 클릭 기록을 지워야, 아래 표가 예전 선택으로 되돌리지 않습니다.
+    st.session_state["_last_clicked"] = None
+
+
+if jump_query.strip():
+    hits = search(df, jump_query, limit=8)
+
+    if hits.empty:
+        st.info(
+            f"**'{jump_query}'** 로 찾은 종목이 없습니다.\n\n"
+            "이름의 일부만 넣거나(예: 삼성), 6자리 종목코드를 넣어 보세요. "
+            "초성으로도 찾을 수 있습니다 (예: ㅅㅅㅈㅈ)."
+        )
+    else:
+        st.caption(f"{len(hits)}개를 찾았습니다. 눌러서 바로 보세요.")
+        cols = st.columns(min(len(hits), 4))
+        for i, (_, hrow) in enumerate(hits.iterrows()):
+            price = hrow.get("종가")
+            price_txt = "" if pd.isna(price) else f"  {int(price):,}원"
+            cols[i % len(cols)].button(
+                f"{hrow['종목명']}  `{hrow['종목코드']}`{price_txt}",
+                key=f"jump_{hrow['종목코드']}",
+                on_click=_jump_to,
+                args=(hrow["종목코드"],),
+                width="stretch",
+            )
+
+st.divider()
+
+
 # ── 화면을 네 칸(탭)으로 나눕니다 ─────────────────────────────
 # 예전에는 목록·차트·재무가 위아래로 길게 이어져서 휴대폰에서 한참 스크롤해야
 # 했습니다. 탭으로 나누면 한 번 눌러 바로 이동할 수 있습니다.
@@ -650,9 +705,19 @@ with tab_list:
         st.session_state["sel_code"] = clicked_code
 
     codes = table["종목코드"].tolist()
-    name_of = dict(zip(table["종목코드"], table["종목명"]))
+    # 이름표는 전체 종목에서 가져옵니다.
+    # (검색으로 고른 종목이 필터에 걸려 목록에 없어도 이름을 보여줘야 합니다)
+    name_of = dict(zip(df["종목코드"], df["종목명"]))
 
     current = st.session_state.get("sel_code")
+
+    # ★ 검색으로 고른 종목이 지금 필터에 걸려 목록에 없다면, 맨 앞에 끼워 넣습니다 ★
+    #   이렇게 하지 않으면 선택이 목록 첫 종목으로 되돌아가서,
+    #   검색해서 눌러도 엉뚱한 종목이 열리게 됩니다.
+    outside = bool(current) and current not in codes
+    if outside:
+        codes = [current] + codes
+
     default_idx = codes.index(current) if current in codes else 0
 
     # 위에서 자리를 잡아둔 곳(sel_slot)에 선택 칸을 채워 넣습니다.
@@ -664,14 +729,25 @@ with tab_list:
             format_func=lambda c: f"{name_of.get(c, c)}  ({c})",
             help="이름 일부를 입력하면 바로 찾을 수 있습니다.",
         )
+        if outside and code == current:
+            st.caption(
+                f"⚠️ **{name_of.get(current, current)}** 는 지금 걸어둔 필터 조건에 "
+                "맞지 않아 아래 목록에는 없습니다. 검색으로 고르셨기 때문에 "
+                "차트·재무 탭에서는 정상적으로 보입니다."
+            )
     st.session_state["sel_code"] = code
 
-row = table[table["종목코드"] == code].iloc[0]
+# 고른 종목의 값은 '전체 종목(df)' 에서 가져옵니다.
+# 걸러진 목록(table)에서 가져오면, 검색으로 고른 종목이 필터 밖일 때
+# 찾지 못해 화면이 멈춥니다.
+#
+# df 에는 위험신호·52주 값까지 모두 들어 있어서, 예전처럼 원본을 한 번 더
+# 뒤질 필요가 없습니다. (row 와 row_full 이 같은 줄을 가리킵니다)
+_found = df[df["종목코드"] == code]
+row = _found.iloc[0] if not _found.empty else df.iloc[0]
+row_full = row
+code = row["종목코드"]
 name = row["종목명"]
-
-# 위험 신호·52주 값은 표(table)에 없는 칸이라 원본(view)에서 따로 가져옵니다.
-_full = view[view["종목코드"] == code]
-row_full = _full.iloc[0] if not _full.empty else None
 
 # 고른 종목이 무엇인지 탭마다 위에 다시 보여줍니다 (탭을 옮겨도 헷갈리지 않게).
 detail_bits = [str(row["시장"]), str(row["종류"])]
