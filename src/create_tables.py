@@ -160,6 +160,53 @@ CREATE TABLE IF NOT EXISTS dart_log (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (fiscal_year, fiscal_quarter)
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- 7) 모의투자 — 가상 매매 기록
+-- ─────────────────────────────────────────────────────────────
+--    진짜 돈은 한 푼도 오가지 않습니다. 사고팔았다고 '적어두는' 표입니다.
+--    보유 수량·평균단가·현금은 따로 저장하지 않고 이 기록에서 계산합니다.
+--    그래야 기록과 잔고가 어긋날 일이 없습니다.
+CREATE TABLE IF NOT EXISTS paper_trade (
+    id           BIGSERIAL PRIMARY KEY,
+    trade_date   DATE        NOT NULL,          -- 사고판 날
+    code         TEXT        NOT NULL,          -- 종목코드
+    side         TEXT        NOT NULL,          -- BUY(샀다) / SELL(팔았다)
+    qty          INTEGER     NOT NULL,          -- 수량 (주)
+    price        NUMERIC(18, 2) NOT NULL,       -- 1주 가격 (원)
+    fee          NUMERIC(18, 2) NOT NULL DEFAULT 0,  -- 증권사 수수료
+    tax          NUMERIC(18, 2) NOT NULL DEFAULT 0,  -- 증권거래세 (팔 때만)
+
+    -- ★ 이 세 칸이 이 기능의 핵심입니다 ★
+    --   왜 샀는지 적어두지 않으면, 나중에 잘됐는지 못됐는지 되돌아볼 수가 없습니다.
+    reason       TEXT,                          -- 왜 사는지 / 왜 파는지
+    target_price NUMERIC(18, 2),                -- 목표가 (여기까지 오르면 팔겠다)
+    stop_price   NUMERIC(18, 2),                -- 손절가 (여기까지 내리면 팔겠다)
+
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT paper_trade_side_ck CHECK (side IN ('BUY', 'SELL')),
+    CONSTRAINT paper_trade_qty_ck  CHECK (qty > 0),
+    CONSTRAINT paper_trade_price_ck CHECK (price >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_trade_code ON paper_trade (code, trade_date);
+CREATE INDEX IF NOT EXISTS idx_paper_trade_date ON paper_trade (trade_date DESC);
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 8) 모의투자 — 예수금 입출금
+-- ─────────────────────────────────────────────────────────────
+--    '증권 계좌에 돈을 넣었다/뺐다' 를 적는 표입니다.
+--    amount 가 양수면 넣은 것, 음수면 뺀 것입니다.
+CREATE TABLE IF NOT EXISTS paper_cash (
+    id         BIGSERIAL PRIMARY KEY,
+    cash_date  DATE        NOT NULL,
+    amount     NUMERIC(18, 2) NOT NULL,   -- +입금 / -출금
+    memo       TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_cash_date ON paper_cash (cash_date DESC);
 """
 
 
@@ -182,7 +229,8 @@ def main() -> None:
                   FROM information_schema.tables t
                  WHERE t.table_schema = 'public'
                    AND t.table_name IN
-                       ('ticker', 'daily_price', 'ingest_log', 'financial', 'dart_log')
+                       ('ticker', 'daily_price', 'ingest_log', 'financial', 'dart_log',
+                        'paper_trade', 'paper_cash')
                  ORDER BY table_name;
                 """
             )
@@ -195,11 +243,13 @@ def main() -> None:
         "ingest_log": "시세 수집기록",
         "financial": "재무지표",
         "dart_log": "재무 수집기록",
+        "paper_trade": "모의투자 매매",
+        "paper_cash": "모의투자 예수금",
     }
     for name, col_count in tables:
         print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count}개)")
 
-    expected = 5
+    expected = 7
     if len(tables) == expected:
         print(f"\n완료! 표 {expected}개가 모두 준비되었습니다.")
     else:
