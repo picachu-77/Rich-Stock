@@ -20,3 +20,7 @@ desktop.ini
 # 로그/임시 결과물
 *.log
 .cache/
+
+# 전달용으로 만든 압축 파일은 저장소에 넣지 않습니다
+*.zip
+*.patch
