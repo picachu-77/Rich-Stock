@@ -177,6 +177,68 @@ _CSS = """
     box-shadow: 0 1px 3px rgba(15,23,42,.35);
   }
 
+  /* ── 8-4. 밸류에이션 밴드 (지금 값이 3년 중 어디쯤인지) ────── */
+  .vb { margin: .1rem 0 1.1rem 0; }
+  .vb-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: .5rem; margin-bottom: .35rem;
+  }
+  .vb-title { font-size: .98rem; font-weight: 600; color: var(--ink-soft); }
+  .vb-title b { font-size: 1.15rem; font-weight: 800; color: var(--ink); }
+  .vb-tag {
+    font-size: .76rem; font-weight: 800; border-radius: 999px;
+    padding: .16rem .6rem; border: 1px solid transparent; white-space: nowrap;
+  }
+  /* 싼 쪽은 파랑(사기 좋은 구간), 비싼 쪽은 빨강(조심할 구간) */
+  .vb-tag.cheap    { color: #1849a9; background: #eff8ff; border-color: #b2ddff; }
+  .vb-tag.cheapish { color: #175cd3; background: #f5faff; border-color: #d1e9ff; }
+  .vb-tag.mid      { color: #475569; background: #f8fafc; border-color: #e2e8f0; }
+  .vb-tag.richish  { color: #b54708; background: #fffaeb; border-color: #fedf89; }
+  .vb-tag.rich     { color: #b42318; background: #fef3f2; border-color: #fecdca; }
+
+  .vb-bar {
+    position: relative; height: 10px; border-radius: 999px;
+    background: linear-gradient(90deg, #dbeafe 0%, #eef2f7 50%, #fee4e2 100%);
+  }
+  /* 배당수익률은 높은 쪽이 유리하므로 색 방향을 뒤집습니다 */
+  .vb-bar.flip {
+    background: linear-gradient(90deg, #fee4e2 0%, #eef2f7 50%, #dbeafe 100%);
+  }
+  .vb-dot {
+    position: absolute; top: -4px; width: 18px; height: 18px; margin-left: -9px;
+    border-radius: 50%; background: #0f172a; border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(15,23,42,.4);
+  }
+  .vb-ticks, .vb-ends {
+    display: flex; justify-content: space-between;
+    font-size: .74rem; color: var(--ink-soft); font-weight: 600;
+  }
+  .vb-ticks { margin-top: .3rem; }
+  .vb-ends  { margin-top: .1rem; font-size: .72rem; opacity: .8; }
+
+  /* ── 8-5. 종목 비교 표 (2~4개 나란히 보기) ─────────────────── */
+  .cmp-wrap { overflow-x: auto; }
+  table.cmp {
+    border-collapse: collapse; width: 100%; font-size: .9rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  }
+  table.cmp th, table.cmp td {
+    padding: .5rem .6rem; border-bottom: 1px solid var(--line); text-align: right;
+    white-space: nowrap;
+  }
+  table.cmp th.metric, table.cmp td.metric {
+    text-align: left; font-weight: 700; color: var(--ink-soft);
+    background: var(--card-soft); position: sticky; left: 0; z-index: 1;
+  }
+  table.cmp thead th {
+    text-align: right; font-weight: 800; color: var(--ink);
+    background: var(--card-soft); border-bottom: 2px solid var(--line);
+  }
+  table.cmp tbody tr:last-child td { border-bottom: 0; }
+  /* 그 줄에서 가장 유리한 값에 표시 */
+  table.cmp td.best { background: #f0fdf4; font-weight: 800; color: #027a48; }
+  table.cmp td.best::after { content: " ★"; font-size: .7rem; color: #12b76a; }
+
   /* ── 9. 기기별로 하나만 보여주기 ───────────────────────────── */
   .st-key-only_mobile { display: none; }          /* 기본(컴퓨터): 휴대폰용 감춤 */
 
@@ -213,6 +275,14 @@ _CSS = """
       -webkit-line-clamp: 2; -webkit-box-orient: vertical;
       overflow: hidden; font-size: .95rem; line-height: 1.45;
     }
+
+    /* 밸류에이션 막대: 눈금 5개는 휴대폰에서 겹치므로 가운데 3개만 남깁니다 */
+    .vb-q { display: none; }
+    .vb-title b { font-size: 1.05rem; }
+
+    /* 비교표: 종목 이름 칸을 고정하고 나머지는 옆으로 밀어 봅니다 */
+    table.cmp { font-size: .82rem; }
+    table.cmp th, table.cmp td { padding: .4rem .45rem; }
 
     /* 입력칸이 작으면 아이폰에서 화면이 확대되므로 16px 이상 유지 */
     input, select, textarea { font-size: 16px !important; }

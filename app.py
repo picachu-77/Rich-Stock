@@ -21,6 +21,17 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.db import get_conn
+from src.fin_trend import (
+    QUARTER_NAME,
+    QUARTER_SPAN,
+    available_kinds,
+    load_financials,
+    profit_figure,
+    revenue_figure,
+    same_kind,
+    summary_lines,
+    yoy_figure,
+)
 from src.market_data import (
     PERIODS,
     RETURN_COLS,
@@ -29,6 +40,15 @@ from src.market_data import (
     load_track_record,
 )
 from src.risk import FLAGS, add_flags, badges_html
+from src.search import search
+from src.valuation import (
+    BAND_METRICS,
+    band_figure,
+    band_html,
+    band_stats,
+    load_band_history,
+    read_sentence,
+)
 from src.ui_korean import apply_korean_ui
 from src.ui_style import apply_style, mobile_sidebar_button
 
@@ -76,39 +96,8 @@ def load_history(code: str) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=600, show_spinner=False)
-def load_financials(code: str) -> pd.DataFrame:
-    """
-    한 종목의 분기별 재무지표를 오래된 것부터 가져옵니다.
-    재무 데이터가 없으면 빈 표를 돌려주며, 화면은 그 부분만 감춥니다.
-    """
-    sql = """
-        SELECT fiscal_year, fiscal_quarter,
-               roe, debt_ratio, op_margin, payout_ratio,
-               revenue, operating_profit, net_income,
-               total_equity, total_liabilities, total_assets
-          FROM financial
-         WHERE code = %(code)s
-         ORDER BY fiscal_year, fiscal_quarter;
-    """
-    try:
-        with get_conn() as conn:
-            df = pd.read_sql(sql, conn, params={"code": code})
-    except Exception:
-        # 재무지표 쪽에 문제가 생겨도 시세 화면은 계속 동작해야 합니다.
-        return pd.DataFrame()
-
-    if df.empty:
-        return df
-
-    q_name = {1: "1분기", 2: "반기", 3: "3분기", 4: "연간"}
-    df["기간"] = [
-        f"{int(y)} {q_name.get(int(q), q)}"
-        for y, q in zip(df["fiscal_year"], df["fiscal_quarter"])
-    ]
-    for c in ["roe", "debt_ratio", "op_margin", "payout_ratio"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df
+# 재무 데이터를 읽는 load_financials() 는 src/fin_trend.py 로 옮겼습니다.
+# 대시보드와 '종목 비교' 화면이 같은 함수를 쓰기 위해서입니다.
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -329,15 +318,19 @@ with st.sidebar:
     st.header("🔎 검색 · 필터")
 
     keyword = st.text_input(
-        "종목명 · 종목코드 검색",
+        "이름으로 목록 좁히기",
         placeholder="예: 삼성, KODEX, 005930",
         key="f_kw",
-        help="여러 단어를 띄어쓰기로 넣으면 그중 하나라도 맞는 종목을 찾습니다.",
+        help="여기는 **목록을 좁히는** 칸입니다. 여러 단어를 띄어쓰기로 넣으면 "
+             "그중 하나라도 맞는 종목만 남습니다.\n\n"
+             "종목 하나만 찾아 바로 보고 싶다면, 화면 위쪽의 "
+             "**🔎 종목 바로 찾기** 를 쓰시는 편이 빠릅니다.",
     )
 
     st.caption(
-        "정렬은 **📋 종목 목록** 위쪽에서 고를 수 있습니다. "
-        "아래 항목을 눌러 펼치면 조건을 더 자세히 걸 수 있습니다."
+        "종목 하나만 찾으시려면 화면 위쪽 **🔎 종목 바로 찾기** 를 쓰세요. "
+        "여기 조건들은 **목록 전체를 좁힐 때** 씁니다. "
+        "정렬은 **📋 종목 목록** 위쪽에 있습니다."
     )
 
     # ── 접이식 카드 ①: 종류 · 시장 ──
@@ -506,10 +499,65 @@ if view.empty:
     st.warning("조건에 맞는 종목이 없습니다. 왼쪽 필터를 조금 넓혀 보세요.")
     st.stop()
 
-# ── 화면을 세 칸(탭)으로 나눕니다 ─────────────────────────────
+# ── 종목 바로 찾기 ───────────────────────────────────────────
+# 사이드바 검색은 '목록을 좁히는' 기능이라, 휴대폰에서는 ☰ 필터를 열어야
+# 보입니다. 하지만 대부분은 "이 종목 하나만 보고 싶다" 입니다.
+# 그래서 화면 맨 위에 항상 보이는 검색칸을 따로 뒀습니다.
+#
+# ★ 필터에 걸려 목록에서 빠진 종목도 여기서는 찾을 수 있습니다 ★
+#   전체 종목(df)에서 찾기 때문입니다. 필터를 풀지 않아도 됩니다.
+st.markdown("#### 🔎 종목 바로 찾기")
+
+jump_query = st.text_input(
+    "종목 바로 찾기",
+    key="q_jump",
+    placeholder="이름 · 종목코드 · 초성으로 찾기   (예: 삼성전자, 005930, ㅅㅅㅈㅈ)",
+    label_visibility="collapsed",
+)
+
+
+def _jump_to(code: str) -> None:
+    """검색 결과를 누르면 그 종목을 '지금 보는 종목' 으로 정합니다."""
+    st.session_state["sel_code"] = code
+    # 표 클릭 기록을 지워야, 아래 표가 예전 선택으로 되돌리지 않습니다.
+    st.session_state["_last_clicked"] = None
+
+
+if jump_query.strip():
+    hits = search(df, jump_query, limit=8)
+
+    if hits.empty:
+        st.info(
+            f"**'{jump_query}'** 로 찾은 종목이 없습니다.\n\n"
+            "이름의 일부만 넣거나(예: 삼성), 6자리 종목코드를 넣어 보세요. "
+            "초성으로도 찾을 수 있습니다 (예: ㅅㅅㅈㅈ)."
+        )
+    else:
+        st.caption(f"{len(hits)}개를 찾았습니다. 눌러서 바로 보세요.")
+        cols = st.columns(min(len(hits), 4))
+        for i, (_, hrow) in enumerate(hits.iterrows()):
+            price = hrow.get("종가")
+            price_txt = "" if pd.isna(price) else f"  {int(price):,}원"
+            cols[i % len(cols)].button(
+                f"{hrow['종목명']}  `{hrow['종목코드']}`{price_txt}",
+                key=f"jump_{hrow['종목코드']}",
+                on_click=_jump_to,
+                args=(hrow["종목코드"],),
+                width="stretch",
+            )
+
+st.divider()
+
+
+# ── 화면을 네 칸(탭)으로 나눕니다 ─────────────────────────────
 # 예전에는 목록·차트·재무가 위아래로 길게 이어져서 휴대폰에서 한참 스크롤해야
 # 했습니다. 탭으로 나누면 한 번 눌러 바로 이동할 수 있습니다.
-tab_list, tab_chart, tab_fin = st.tabs(["📋 종목 목록", "📊 차트", "🏦 재무"])
+#
+# 탭의 순서는 판단하는 순서와 같습니다.
+#   목록에서 고르고 → 주가 흐름을 보고 → 지금 싼지 보고 → 회사 상태를 봅니다.
+tab_list, tab_chart, tab_val, tab_fin = st.tabs(
+    ["📋 종목 목록", "📊 차트", "📉 싼가 비싼가", "🏦 재무"]
+)
 
 with tab_list:
     st.subheader(f"종목 목록  ({len(view):,}개)")
@@ -657,9 +705,19 @@ with tab_list:
         st.session_state["sel_code"] = clicked_code
 
     codes = table["종목코드"].tolist()
-    name_of = dict(zip(table["종목코드"], table["종목명"]))
+    # 이름표는 전체 종목에서 가져옵니다.
+    # (검색으로 고른 종목이 필터에 걸려 목록에 없어도 이름을 보여줘야 합니다)
+    name_of = dict(zip(df["종목코드"], df["종목명"]))
 
     current = st.session_state.get("sel_code")
+
+    # ★ 검색으로 고른 종목이 지금 필터에 걸려 목록에 없다면, 맨 앞에 끼워 넣습니다 ★
+    #   이렇게 하지 않으면 선택이 목록 첫 종목으로 되돌아가서,
+    #   검색해서 눌러도 엉뚱한 종목이 열리게 됩니다.
+    outside = bool(current) and current not in codes
+    if outside:
+        codes = [current] + codes
+
     default_idx = codes.index(current) if current in codes else 0
 
     # 위에서 자리를 잡아둔 곳(sel_slot)에 선택 칸을 채워 넣습니다.
@@ -671,14 +729,25 @@ with tab_list:
             format_func=lambda c: f"{name_of.get(c, c)}  ({c})",
             help="이름 일부를 입력하면 바로 찾을 수 있습니다.",
         )
+        if outside and code == current:
+            st.caption(
+                f"⚠️ **{name_of.get(current, current)}** 는 지금 걸어둔 필터 조건에 "
+                "맞지 않아 아래 목록에는 없습니다. 검색으로 고르셨기 때문에 "
+                "차트·재무 탭에서는 정상적으로 보입니다."
+            )
     st.session_state["sel_code"] = code
 
-row = table[table["종목코드"] == code].iloc[0]
+# 고른 종목의 값은 '전체 종목(df)' 에서 가져옵니다.
+# 걸러진 목록(table)에서 가져오면, 검색으로 고른 종목이 필터 밖일 때
+# 찾지 못해 화면이 멈춥니다.
+#
+# df 에는 위험신호·52주 값까지 모두 들어 있어서, 예전처럼 원본을 한 번 더
+# 뒤질 필요가 없습니다. (row 와 row_full 이 같은 줄을 가리킵니다)
+_found = df[df["종목코드"] == code]
+row = _found.iloc[0] if not _found.empty else df.iloc[0]
+row_full = row
+code = row["종목코드"]
 name = row["종목명"]
-
-# 위험 신호·52주 값은 표(table)에 없는 칸이라 원본(view)에서 따로 가져옵니다.
-_full = view[view["종목코드"] == code]
-row_full = _full.iloc[0] if not _full.empty else None
 
 # 고른 종목이 무엇인지 탭마다 위에 다시 보여줍니다 (탭을 옮겨도 헷갈리지 않게).
 detail_bits = [str(row["시장"]), str(row["종류"])]
@@ -846,6 +915,65 @@ with tab_chart:
         )
 
 
+# ── 싼가 비싼가 탭 (밸류에이션 밴드) ─────────────────────────
+# 'PER 12배' 라는 숫자 하나로는 초보자가 판단할 수 없습니다.
+# 그 회사가 지난 3년 동안 받아온 자기 PER 과 비교해서 보여줍니다.
+with tab_val:
+    st.markdown(headline)
+
+    st.caption(
+        "다른 회사와 비교하지 않습니다. **이 회사가 지난 3년 동안 받아온 자기 값**과 "
+        "비교합니다. 업종마다 적정 수준이 완전히 다르기 때문입니다."
+    )
+
+    band_hist = load_band_history(code)
+
+    if band_hist.empty:
+        st.info("이 종목은 과거 지표가 아직 없습니다. 수집이 끝나면 표시됩니다.")
+    else:
+        drawn = 0
+        for metric in BAND_METRICS:
+            stats = band_stats(band_hist, metric)
+            if stats is None:
+                continue
+            drawn += 1
+
+            st.markdown(band_html(stats), unsafe_allow_html=True)
+            st.markdown(read_sentence(stats))
+
+            with st.expander(f"{metric} 3년 흐름 그래프로 보기"):
+                fig_band = band_figure(band_hist, metric, stats)
+                if fig_band is None:
+                    st.info("그래프를 그릴 자료가 부족합니다.")
+                else:
+                    st.plotly_chart(
+                        fig_band, width="stretch", config={"displayModeBar": False}
+                    )
+                st.caption(
+                    f"{BAND_METRICS[metric]['what']} · "
+                    f"비교에 쓴 거래일 {stats['일수']:,}일"
+                )
+            st.divider()
+
+        if drawn == 0:
+            st.info(
+                "이 종목은 비교할 지표가 없습니다.\n\n"
+                "ETF 는 PER·PBR 이 제공되지 않고, 적자가 이어진 회사는 PER 을 "
+                "계산할 수 없습니다. 이런 경우 이 화면 대신 **🏦 재무 탭**에서 "
+                "매출·이익 추세를 보시는 편이 낫습니다."
+            )
+        else:
+            st.warning(
+                "**이 화면을 믿으면 안 되는 경우**\n\n"
+                "1. 회사가 하는 사업이 3년 사이에 크게 바뀌었다면, 과거와 비교하는 것 "
+                "자체가 의미 없습니다.\n"
+                "2. 적자가 난 기간은 PER 을 계산할 수 없어 비교에서 빠졌습니다. "
+                "적자가 잦은 회사일수록 이 막대는 부정확합니다.\n"
+                "3. **싸다 = 사도 된다가 아닙니다.** 시장이 그 회사의 앞날을 나쁘게 "
+                "보기 때문에 싼 경우가 훨씬 많습니다. 왜 싼지는 직접 확인하셔야 합니다."
+            )
+
+
 # ── 재무 탭 (DART 전자공시) ──────────────────────────────────
 # 이 부분은 시세와 완전히 분리되어 있습니다.
 # 재무 데이터가 없거나 문제가 생겨도 차트 탭은 정상 동작합니다.
@@ -881,7 +1009,76 @@ with tab_fin:
         _show(m4, "배당성향", latest["payout_ratio"],
               help_text="현금배당금총액 ÷ 당기순이익 × 100. 연간 보고서에만 있습니다")
 
-        # 분기별 추이 차트
+        st.divider()
+
+        # ══════════════════════════════════════════════════════
+        #  실적 추세 — 숫자 하나가 아니라 '방향' 을 봅니다
+        # ══════════════════════════════════════════════════════
+        st.subheader("📈 실적이 좋아지는 중인가요?")
+
+        kinds = available_kinds(fin)
+        if not kinds:
+            st.info(
+                "추세를 그리려면 같은 종류의 보고서가 2개 이상 필요합니다. "
+                "(예: 2024년 연간 + 2025년 연간)\n\n"
+                "아직 한 개뿐이라 방향을 판단할 수 없습니다."
+            )
+        else:
+            # ★ 왜 보고서 종류를 고르게 하나요? ★
+            #   분기 보고서는 3개월치, 사업보고서는 1년치입니다. 이 둘을 나란히
+            #   그리면 회사가 그대로여도 연간 막대만 네 배쯤 커 보입니다.
+            #   그래서 같은 종류끼리만 모아 비교합니다.
+            kind_labels = {
+                q: f"{QUARTER_NAME.get(q, q)} ({QUARTER_SPAN.get(q, '')})" for q in kinds
+            }
+            picked_label = st.radio(
+                "어떤 보고서끼리 비교할까요",
+                [kind_labels[q] for q in kinds],
+                index=0,
+                horizontal=True,
+                help="연간 보고서끼리 비교하는 것이 가장 정확합니다. "
+                     "분기(3개월치)와 연간(1년치)은 담는 기간이 달라 "
+                     "섞어서 비교하면 안 됩니다.",
+            )
+            kind = next(q for q in kinds if kind_labels[q] == picked_label)
+            same = same_kind(fin, kind)
+
+            # 말로 먼저 요약해 줍니다 (그래프를 못 읽어도 알 수 있게)
+            for line in summary_lines(same, kind):
+                st.markdown(f"- {line}")
+
+            fig_rev = revenue_figure(same, kind)
+            if fig_rev is not None:
+                st.plotly_chart(
+                    fig_rev, width="stretch", config={"displayModeBar": False}
+                )
+                st.caption(
+                    "매출(막대)은 느는데 영업이익률(선)이 떨어지면, 싸게 팔아 덩치만 "
+                    "키우는 중일 수 있습니다. 반대로 매출이 그대로여도 이익률이 오르면 "
+                    "좋아지는 중입니다."
+                )
+
+            fig_profit = profit_figure(same, kind)
+            if fig_profit is not None:
+                st.plotly_chart(
+                    fig_profit, width="stretch", config={"displayModeBar": False}
+                )
+
+            fig_yoy = yoy_figure(same, kind)
+            if fig_yoy is not None:
+                with st.expander("작년 같은 기간과 비교한 증감률 보기"):
+                    st.plotly_chart(
+                        fig_yoy, width="stretch", config={"displayModeBar": False}
+                    )
+                    st.caption(
+                        "작년 실적이 적자였던 해는 증감률을 계산할 수 없어 빈칸입니다. "
+                        "(적자에서 흑자로 바뀐 것은 % 로 표현되지 않습니다)"
+                    )
+
+        st.divider()
+
+        # 분기별 비율 지표 추이 차트
+        st.subheader("📊 비율 지표 추이")
         metric_choice = st.radio(
             "추이로 볼 지표",
             ["ROE", "부채비율", "영업이익률", "배당성향"],
