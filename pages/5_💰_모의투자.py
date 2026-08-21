@@ -11,9 +11,11 @@
   후합니다. 잘된 것만 기억하고 틀린 것은 잊기 때문입니다.
   적어두어야만 내 판단이 실제로 어땠는지 알 수 있습니다.
 
-★ 살 때 이유를 반드시 적게 합니다 ★
-  이유 없이 산 종목은 팔 때도 기준이 없습니다. 그래서 이 화면은
-  '왜 사는지·언제 팔지'를 적지 않으면 매수 기록을 남기지 않습니다.
+살 때 이유를 적어두길 권합니다
+  이유 없이 산 종목은 팔 때도 기준이 없습니다. 다만 매번 적기 번거로우므로
+  적지 않아도 살 수 있게 두었습니다. 적어두면 팔 때 다시 보여드립니다.
+
+  실제로 매수를 막는 것은 '현금 부족' 하나뿐입니다.
 """
 
 from __future__ import annotations
@@ -294,14 +296,21 @@ with tab_trade:
                     f"= 필요한 돈 **{money(need)}**"
                 )
 
-                st.markdown("##### 왜 사시나요? (안 적으면 살 수 없습니다)")
+                st.markdown("##### 왜 사시나요? (선택)")
                 reason = st.text_area(
                     "사는 이유",
                     key="buy_reason",
                     placeholder="예: 3년 PER 하위 10% 구간이고 매출이 3년째 늘고 있음. "
                                 "반도체 업황 회복 기대.",
-                    help="나중에 이 기록을 다시 보면, 내가 어떤 실수를 반복하는지 보입니다.",
+                    help="적어두면 나중에 📔 거래 내역에서 다시 읽어볼 수 있습니다. "
+                         "비워두고 사셔도 됩니다.",
                 )
+                if not reason.strip():
+                    st.caption(
+                        "비워두셔도 살 수 있습니다. 다만 한 줄이라도 적어두면 나중에 "
+                        "**'그때 왜 샀더라'** 를 알 수 있어서, 같은 실수를 반복하는지 "
+                        "확인할 수 있습니다."
+                    )
 
                 t1, t2 = st.columns(2)
                 target = t1.number_input(
@@ -318,20 +327,28 @@ with tab_trade:
                 )
 
                 # ── 살 수 있는지 확인 ──
+                # 매수를 실제로 막는 것은 '현금 부족' 하나뿐입니다.
+                # 없는 돈으로는 살 수 없기 때문입니다.
+                # 나머지(이유·목표가·손절가)는 알려주기만 하고 막지 않습니다.
                 problems = []
                 if need > 현금:
                     problems.append(
                         f"현금이 부족합니다. 필요한 돈 {money(need)} > 현금 {money(현금)}"
                     )
-                if len(reason.strip()) < 5:
-                    problems.append("사는 이유를 5글자 이상 적어주세요.")
-                if stop and stop >= buy_price:
-                    problems.append("손절가는 사는 가격보다 낮아야 합니다.")
-                if target and target <= buy_price:
-                    problems.append("목표가는 사는 가격보다 높아야 합니다.")
-
                 for p in problems:
                     st.error(p)
+
+                # 숫자가 앞뒤가 안 맞으면 알려만 줍니다 (사는 것은 그대로 됩니다)
+                if stop and stop >= buy_price:
+                    st.warning(
+                        "손절가가 사는 가격보다 높거나 같습니다. "
+                        "손절가는 '여기까지 내리면 팔겠다'는 가격이라 보통 더 낮습니다."
+                    )
+                if target and target <= buy_price:
+                    st.warning(
+                        "목표가가 사는 가격보다 낮거나 같습니다. "
+                        "목표가는 '여기까지 오르면 팔겠다'는 가격이라 보통 더 높습니다."
+                    )
 
                 if st.button("🔴 사기", type="primary", width="stretch",
                              disabled=bool(problems), key="do_buy"):
