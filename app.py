@@ -41,6 +41,7 @@ from src.market_data import (
 )
 from src.risk import FLAGS, add_flags, badges_html
 from src.search import search
+from src.ui_table import as_text, color_map, text_columns
 from src.valuation import (
     BAND_METRICS,
     band_figure,
@@ -663,71 +664,46 @@ with tab_list:
 
     # ── 컴퓨터: 지금까지의 표 그대로 ──
     with st.container(key="only_desktop"):
+        # ── 표 그리기 ────────────────────────────────────────
+        # 숫자를 미리 글자로 바꿔서 넘깁니다. 값이 없는 칸에 Streamlit 이
+        # 'None' 이라고 영어로 적는 것을 없애기 위해서입니다. → src/ui_table.py
+        #
+        # 대신 열 제목을 누르면 글자순으로 정렬되므로, 숫자 순서로 보시려면
+        # 위쪽 '무엇을 기준으로' 칸을 쓰셔야 합니다. (표 사용법에도 적어뒀습니다)
+        HELPS = {
+            "시가총액(억)": "ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
+            "고점대비(%)": "최근 1년 최고가 대비 지금 주가가 몇 % 떨어져 있는지. "
+                          "0 에 가까우면 1년 중 가장 비싼 구간입니다. "
+                          "많이 떨어졌다고 싼 것은 아니니 이유를 꼭 확인하세요.",
+            "PER": "주가수익비율 = 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 쌉니다. "
+                   "적자 기업이나 ETF 는 값이 없어 빈칸입니다.",
+            "PBR": "주가순자산비율 = 주가 ÷ 주당순자산. 1보다 낮으면 장부가치보다 쌉니다.",
+            "배당수익률(%)": "1년 배당금 ÷ 주가 × 100. 은행 이자율과 비교해 보세요.",
+            "ROE(%)": "자기자본이익률 = 당기순이익 ÷ 자본총계 × 100. "
+                      "높을수록 내 돈으로 돈을 잘 버는 회사입니다. (DART 최신 분기 기준)",
+            "부채비율(%)": "부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사입니다. "
+                          "100% 면 자기 돈과 빌린 돈이 같다는 뜻입니다.",
+            "영업이익률(%)": "영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사입니다.",
+            "52주위치(%)": "최근 1년 범위에서 지금 주가의 위치. 0 이면 1년 최저, 100 이면 최고입니다.",
+        }
+        LABELS = {"종가": "종가(원)", "거래량": "거래량(주)", "시가총액(억)": "시가총액(억원)"}
+
+        numeric_src = table[shown_cols]
+        shown_text = as_text(numeric_src, shown_cols)
+        updown = [c for c in ["등락률(%)"] + RETURN_COLS if c in shown_cols]
+
         event = st.dataframe(
-            # 오른 값은 빨강, 내린 값은 파랑으로 칠해 한눈에 보이게 합니다.
-            #
-            # ※ 값이 없는 칸에 Streamlit 이 'None' 이라고 적습니다. 이걸 없애려면
-            #   숫자를 글자로 바꿔야 하는데, 그러면 열 제목을 눌렀을 때 14.85 가
-            #   9.5 보다 앞에 오는 식으로 정렬이 틀어집니다. 투자 판단에 쓰는
-            #   표에서는 그쪽이 더 위험하므로 숫자 열을 그대로 둡니다.
-            table[shown_cols].style.map(
-                color_updown,
-                subset=[c for c in ["등락률(%)"] + RETURN_COLS if c in shown_cols],
+            shown_text.style.apply(
+                lambda _: color_map(numeric_src, shown_cols, updown), axis=None
             ),
             width="stretch",
             hide_index=True,
             height=520,   # 한 화면에 더 많은 종목이 보이도록
             on_select="rerun",
             selection_mode="single-row",
-            column_config={
-                "종목코드": st.column_config.TextColumn("종목코드", width="small"),
-                "종목명": st.column_config.TextColumn("종목명", width="medium"),
-                "종가": st.column_config.NumberColumn("종가(원)", format="localized"),
-                "거래량": st.column_config.NumberColumn("거래량(주)", format="localized"),
-                "시가총액(억)": st.column_config.NumberColumn(
-                    "시가총액(억원)",
-                    format="localized",
-                    help="ETF 는 거래소가 시가총액을 제공하지 않아 빈칸입니다.",
-                ),
-                "등락률(%)": st.column_config.NumberColumn("등락률(%)", format="localized"),
-                "고점대비(%)": st.column_config.NumberColumn(
-                    "고점대비(%)", format="localized",
-                    help="최근 1년 최고가 대비 지금 주가가 몇 % 떨어져 있는지. "
-                         "0 에 가까우면 1년 중 가장 비싼 구간입니다. "
-                         "많이 떨어졌다고 싼 것은 아니니 이유를 꼭 확인하세요.",
-                ),
-                "PER": st.column_config.NumberColumn(
-                    "PER", format="localized",
-                    help="주가수익비율 = 주가 ÷ 주당순이익. 낮을수록 이익 대비 주가가 쌉니다. "
-                         "적자 기업은 계산이 안 되어 빈칸입니다.",
-                ),
-                "PBR": st.column_config.NumberColumn(
-                    "PBR", format="localized",
-                    help="주가순자산비율 = 주가 ÷ 주당순자산. 1보다 낮으면 장부가치보다 쌉니다.",
-                ),
-                "배당수익률(%)": st.column_config.NumberColumn(
-                    "배당수익률(%)", format="localized",
-                    help="1년 배당금 ÷ 주가 × 100. 은행 이자율과 비교해 보세요.",
-                ),
-                "ROE(%)": st.column_config.NumberColumn(
-                    "ROE(%)", format="localized",
-                    help="자기자본이익률 = 당기순이익 ÷ 자본총계 × 100. "
-                         "높을수록 내 돈으로 돈을 잘 버는 회사입니다. (DART 최신 분기 기준)",
-                ),
-                "부채비율(%)": st.column_config.NumberColumn(
-                    "부채비율(%)", format="localized",
-                    help="부채총계 ÷ 자본총계 × 100. 낮을수록 빚이 적은 회사입니다. "
-                         "100% 면 자기 돈과 빌린 돈이 같다는 뜻입니다.",
-                ),
-                "영업이익률(%)": st.column_config.NumberColumn(
-                    "영업이익률(%)", format="localized",
-                    help="영업이익 ÷ 매출액 × 100. 높을수록 장사를 잘하는 회사입니다.",
-                ),
-                **{
-                    c: st.column_config.NumberColumn(c, format="localized")
-                    for c in RETURN_COLS
-                },
-            },
+            column_config=text_columns(
+                numeric_src, shown_cols, helps=HELPS, labels=LABELS
+            ),
         )
 
         # 사용법은 표 '아래' 에 둡니다. 위에 두면 그만큼 표가 밀려 내려갑니다.
@@ -735,8 +711,9 @@ with tab_list:
             st.markdown(
                 "- 표 왼쪽 끝의 네모(☐)를 누르면 그 종목이 **📊 차트 · 🏦 재무** 탭에 나타납니다\n"
                 "- 표 위의 **종목 선택** 칸에서 골라도 됩니다\n"
-                "- 열 제목을 누르면 그 열 기준으로 정렬됩니다\n"
-                "- 열이 부족하면 위의 **어떤 숫자를 볼까요** 에서 다른 묶음을 고르세요"
+                "- 숫자 순서로 줄 세우려면 표 위의 **무엇을 기준으로** 를 쓰세요\n"
+                "  (열 제목을 눌러도 정렬되지만 글자순이라 숫자 크기와 다를 수 있습니다)\n"
+                "- 열이 부족하면 위의 **숫자 묶음** 에서 다른 묶음을 고르세요"
             )
 
     # ── 어떤 종목을 볼지 정하기 ───────────────────────────────

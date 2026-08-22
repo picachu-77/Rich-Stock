@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 _CSS = """
 <style>
@@ -324,10 +323,14 @@ _CSS = """
       overflow-x: auto; scrollbar-width: none;
     }
     [data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
-    /* 탭 4개가 한 줄에 들어가도록 좌우 여백을 줄입니다 */
+    /* 탭 4개가 한 줄에 들어가도록 좌우 여백과 글자를 줄입니다.
+       그래도 넘치면 옆으로 밀어서 볼 수 있습니다. */
+    [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0 !important; }
     [data-testid="stTabs"] [data-baseweb="tab"] {
-      padding: .5rem .45rem; font-size: .88rem; white-space: nowrap;
+      padding: .5rem .3rem; font-size: .82rem; white-space: nowrap;
     }
+    /* 탭 안의 그림문자를 조금 줄여 자리를 아낍니다 */
+    [data-testid="stTabs"] [data-baseweb="tab"] p { letter-spacing: -.3px; }
 
     /* 접이식 카드 제목이 3줄씩 길어지지 않게 2줄로 제한 */
     [data-testid="stAppViewContainer"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p {
@@ -414,8 +417,12 @@ _SIDEBAR_BTN = """
 
 def mobile_sidebar_button() -> None:
     """휴대폰에서 화면 아래에 '☰ 필터' 버튼을 띄웁니다. (사이드바가 있는 화면에서만 사용)"""
-    components.html(_SIDEBAR_BTN, height=0, width=0)
+    # 예전에 쓰던 st.components.v1.html 은 2026-06-01 자로 없어질 예정이라
+    # 같은 일을 하는 st.iframe 으로 바꿨습니다. → src/ui_korean.py 의 _embed()
+    from .ui_korean import _embed
+
+    _embed(_SIDEBAR_BTN)
     st.markdown(
-        '<style>.stElementContainer:has(iframe[height="0"]) { display: none; }</style>',
+        '<style>[data-testid="stElementContainer"]:has(> iframe) { display: none; }</style>',
         unsafe_allow_html=True,
     )

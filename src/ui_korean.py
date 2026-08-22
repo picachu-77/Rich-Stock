@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 # 영어 → 한글 사전
 TRANSLATIONS: dict[str, str] = {
@@ -164,18 +163,42 @@ def josa(word: str, pair: str) -> str:
     return word + (with_batchim if has_batchim else without_batchim)
 
 
+def _embed(html: str) -> None:
+    """
+    눈에 보이지 않는 칸에 HTML(스크립트)을 심습니다.
+
+    왜 이렇게 하나요?
+      Streamlit 은 화면을 직접 손대는 방법을 제공하지 않습니다. 그래서
+      크기가 0 인 칸을 하나 만들고, 그 안의 스크립트가 바깥 화면을 고칩니다.
+
+    st.iframe 이 없는 옛 버전에서도 돌아가도록 예전 방식으로 되돌아갑니다.
+
+    크기를 1px 로 두는 이유
+      st.iframe 은 0 을 받지 않습니다("양수여야 합니다"). 그래서 1px 로 만들고,
+      칸 자체는 apply_style() 의 CSS 가 감춥니다. 화면에는 보이지 않습니다.
+    """
+    if hasattr(st, "iframe"):
+        st.iframe(html, height=1, width=1)
+    else:  # Streamlit 1.60 이전
+        import streamlit.components.v1 as components
+
+        components.html(html, height=0, width=0)
+
+
 def apply_korean_ui() -> None:
     """Streamlit 기본 UI 의 영어 글자를 한글로 바꿉니다. app.py 맨 위에서 한 번 호출하세요."""
-    components.html(
-        _SCRIPT.replace("__DICT__", json.dumps(TRANSLATIONS, ensure_ascii=False)),
-        height=0,
-        width=0,
+    # st.iframe 으로 눈에 안 보이는 칸을 하나 만들고, 그 안에서 위 스크립트를 돌립니다.
+    #
+    # 예전에는 st.components.v1.html 을 썼는데 2026-06-01 자로 없어질 예정이라
+    # 같은 일을 하는 st.iframe 으로 바꿨습니다. 인자가 같아 동작은 동일합니다.
+    _embed(
+        _SCRIPT.replace("__DICT__", json.dumps(TRANSLATIONS, ensure_ascii=False))
     )
-    # 위 components.html 이 만드는 빈 칸이 화면에 여백을 남기지 않도록 숨깁니다.
+    # 위 칸이 화면에 여백을 남기지 않도록 숨깁니다.
     st.markdown(
         """
         <style>
-          .stElementContainer:has(iframe[height="0"]) { display: none; }
+          [data-testid="stElementContainer"]:has(> iframe) { display: none; }
         </style>
         """,
         unsafe_allow_html=True,
