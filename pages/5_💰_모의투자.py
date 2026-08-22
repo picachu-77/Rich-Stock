@@ -28,8 +28,11 @@ import streamlit as st
 
 from src.db import get_conn
 from src.market_data import load_overview
+from src.risk import add_flags, badges_html
+from src.ui_table import as_text, text_columns
 from src.paper import (
     DEFAULT_FEE_RATE,
+    alerts,
     DEFAULT_TAX_RATE,
     add_cash,
     add_trade,
@@ -46,7 +49,7 @@ from src.paper import (
     walk,
 )
 from src.search import search
-from src.ui_korean import apply_korean_ui
+from src.ui_korean import apply_korean_ui, josa
 from src.ui_style import apply_style
 
 st.set_page_config(
@@ -113,6 +116,9 @@ if market.empty:
     st.warning("아직 시세 데이터가 없습니다. 수집기를 먼저 실행해 주세요.")
     st.stop()
 
+# 보유 종목에 위험 신호(자본잠식·적자 잦음 등)를 함께 보여주기 위해 붙입니다.
+market = add_flags(market)
+
 price_of = {
     r["종목코드"]: (float(r["종가"]) if pd.notna(r["종가"]) else None)
     for _, r in market.iterrows()
@@ -120,6 +126,7 @@ price_of = {
 price_of = {k: v for k, v in price_of.items() if v is not None}
 name_of = dict(zip(market["종목코드"], market["종목명"]))
 sector_of = dict(zip(market["종목코드"], market.get("업종", pd.Series(dtype=str))))
+flags_of = dict(zip(market["종목코드"], market.get("위험신호", pd.Series(dtype=object))))
 
 trades = load_trades()
 cash = load_cash()
@@ -184,9 +191,27 @@ with tab_acct:
     if pos.empty:
         st.info("아직 들고 있는 종목이 없습니다. **🛒 사고팔기** 탭에서 사보세요.")
     else:
+        # ══ 살 때 정한 약속에 닿았는지 — 가장 먼저 보여줍니다 ══
+        # 목표가·손절가를 적어두게 해놓고 아무도 안 보면 적는 의미가 없습니다.
+        for a in alerts(pos):
+            현재 = money(a["현재가"])
+            기준 = money(a["기준가"])
+            # 종목명 끝 글자에 맞춰 조사를 고릅니다 (가나반도체가 / 가나전자가)
+            이름 = josa(str(a["종목명"]), "이/가")
+            if a["종류"] == "손절":
+                st.error(
+                    f"🔻 **{이름}** 손절가 아래로 내려왔습니다 "
+                    f"(지금 {현재} · 정해둔 손절가 {기준})\n\n{a['말']}"
+                )
+            else:
+                st.success(
+                    f"🎯 **{이름}** 목표가에 닿았습니다 "
+                    f"(지금 {현재} · 정해둔 목표가 {기준})\n\n{a['말']}"
+                )
+
         st.subheader("들고 있는 종목")
 
-        # 쏠림 경고를 표보다 먼저 보여줍니다 (숫자보다 위험이 먼저입니다)
+        # 쏠림 경고 (숫자보다 위험이 먼저입니다)
         for w in concentration_warnings(pos):
             st.warning(
                 f"⚠️ {w}\n\n"
@@ -194,29 +219,52 @@ with tab_acct:
                 "분산은 돈을 더 버는 방법이 아니라 **크게 망하지 않는 방법**입니다."
             )
 
-        show = pos.copy()
+        # 보유 종목에 붙은 위험 신호 (대시보드와 같은 기준 → src/risk.py)
+        risk_lines = []
+        for _, r in pos.iterrows():
+            fl = flags_of.get(r["종목코드"])
+            if isinstance(fl, (list, tuple)) and fl:
+                # 이 줄은 HTML 로 그리므로 마크다운 ** 대신 <b> 를 씁니다.
+                # (** 를 쓰면 별표가 화면에 그대로 보입니다)
+                risk_lines.append(
+                    f"<b>{r['종목명']}</b> {badges_html(fl)}"
+                )
+        if risk_lines:
+            st.markdown(
+                "<div class='risk-box'>⚠️ 들고 있는 종목에 붙은 신호<br>"
+                + "<br>".join(risk_lines) + "</div>",
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "이 신호는 '팔라'는 뜻이 아니라 '왜 들고 있는지 다시 확인하라'는 "
+                "표시입니다. 자세한 뜻은 대시보드 📊 차트 탭에서 볼 수 있습니다."
+            )
+
+        # ── 표 ──
+        # 값이 없는 칸에 'None' 이 찍히지 않도록 미리 글자로 바꿉니다. → src/ui_table.py
+        SHOW = ["종목명", "종목코드", "수량", "평균단가", "현재가",
+                "평가금액", "평가손익", "수익률(%)", "비중(%)",
+                "목표가", "손절가", "보유일"]
+        HELPS = {
+            "평균단가": "산 가격의 평균입니다. 수수료까지 포함한 값이라 "
+                       "'실제로 1주에 얼마 들었는지'를 뜻합니다.",
+            "평가손익": "아직 팔지 않았으므로 확정된 돈이 아닙니다. "
+                       "팔면 수수료와 세금이 더 빠집니다.",
+            "비중(%)": "들고 있는 것 전체에서 이 종목이 차지하는 몫",
+            "목표가": "살 때 '여기까지 오르면 팔겠다'고 정한 가격입니다.",
+            "손절가": "살 때 '여기까지 내리면 팔겠다'고 정한 가격입니다.",
+            "보유일": "처음 산 날부터 오늘까지 며칠 지났는지",
+        }
+        LABELS = {"수량": "수량(주)", "평균단가": "평균단가(원)", "현재가": "현재가(원)",
+                  "평가금액": "평가금액(원)", "평가손익": "평가손익(원)",
+                  "목표가": "목표가(원)", "손절가": "손절가(원)", "보유일": "보유(일)"}
+
+        src = pos[SHOW]
         st.dataframe(
-            show[["종목명", "종목코드", "수량", "평균단가", "현재가",
-                  "평가금액", "평가손익", "수익률(%)", "비중(%)"]],
+            as_text(src, SHOW),
             width="stretch",
             hide_index=True,
-            column_config={
-                "수량": st.column_config.NumberColumn("수량(주)", format="localized"),
-                "평균단가": st.column_config.NumberColumn(
-                    "평균단가(원)", format="localized",
-                    help="산 가격의 평균입니다. 수수료까지 포함한 값이라 "
-                         "'실제로 1주에 얼마 들었는지'를 뜻합니다."),
-                "현재가": st.column_config.NumberColumn("현재가(원)", format="localized"),
-                "평가금액": st.column_config.NumberColumn("평가금액(원)", format="localized"),
-                "평가손익": st.column_config.NumberColumn(
-                    "평가손익(원)", format="localized",
-                    help="아직 팔지 않았으므로 확정된 돈이 아닙니다. "
-                         "팔면 수수료와 세금이 더 빠집니다."),
-                "수익률(%)": st.column_config.NumberColumn("수익률(%)", format="localized"),
-                "비중(%)": st.column_config.NumberColumn(
-                    "비중(%)", format="localized",
-                    help="들고 있는 것 전체에서 이 종목이 차지하는 몫"),
-            },
+            column_config=text_columns(src, SHOW, helps=HELPS, labels=LABELS),
         )
 
         st.caption(

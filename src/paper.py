@@ -179,12 +179,24 @@ def walk(trades: pd.DataFrame) -> tuple[dict[str, dict], list[dict]]:
         fee = float(t["fee"] or 0)
         tax = float(t["tax"] or 0)
 
-        pos = held.setdefault(code, {"수량": 0, "취득원가": 0.0, "평균단가": 0.0})
+        pos = held.setdefault(
+            code,
+            {"수량": 0, "취득원가": 0.0, "평균단가": 0.0,
+             "보유시작": None, "목표가": None, "손절가": None},
+        )
 
         if t["side"] == "BUY":
+            # 다 팔았다가 다시 사면 '보유 기간' 은 그때부터 새로 셉니다.
+            if pos["수량"] == 0:
+                pos["보유시작"] = t["trade_date"]
             pos["수량"] += qty
             pos["취득원가"] += qty * price + fee
             pos["평균단가"] = pos["취득원가"] / pos["수량"] if pos["수량"] else 0.0
+            # 살 때 정한 목표가·손절가는 가장 최근 것을 기준으로 둡니다.
+            if pd.notna(t.get("target_price")):
+                pos["목표가"] = float(t["target_price"])
+            if pd.notna(t.get("stop_price")):
+                pos["손절가"] = float(t["stop_price"])
             continue
 
         # ── 팔 때 ──
@@ -211,6 +223,9 @@ def walk(trades: pd.DataFrame) -> tuple[dict[str, dict], list[dict]]:
         pos["취득원가"] = avg * pos["수량"]
         if pos["수량"] == 0:
             pos["평균단가"] = 0.0
+            pos["보유시작"] = None
+            pos["목표가"] = None
+            pos["손절가"] = None
 
     return held, closed
 
@@ -256,6 +271,21 @@ def positions(trades: pd.DataFrame, price_of: dict[str, float],
         now = price_of.get(code)
         평가금액 = (now * pos["수량"]) if now is not None else None
         평가손익 = (평가금액 - pos["취득원가"]) if 평가금액 is not None else None
+        목표가, 손절가 = pos.get("목표가"), pos.get("손절가")
+
+        # ★ 살 때 정한 약속에 닿았는지 ★
+        #   적어두기만 하고 아무도 안 보면 적는 의미가 없습니다.
+        신호 = None
+        if now is not None:
+            if 목표가 and now >= 목표가:
+                신호 = "목표가 도달"
+            elif 손절가 and now <= 손절가:
+                신호 = "손절가 도달"
+
+        시작 = pos.get("보유시작")
+        보유일 = (pd.Timestamp.today().normalize() - pd.Timestamp(시작)).days \
+            if 시작 is not None else None
+
         rows.append({
             "종목코드": code,
             "종목명": name_of.get(code, code),
@@ -268,12 +298,17 @@ def positions(trades: pd.DataFrame, price_of: dict[str, float],
             "평가손익": 평가손익,
             "수익률(%)": ((평가금액 / pos["취득원가"] - 1) * 100)
                          if (평가금액 is not None and pos["취득원가"]) else None,
+            "목표가": 목표가,
+            "손절가": 손절가,
+            "신호": 신호,
+            "보유일": 보유일,
         })
 
     if not rows:
         return pd.DataFrame(columns=[
             "종목코드", "종목명", "업종", "수량", "평균단가", "현재가",
-            "취득원가", "평가금액", "평가손익", "수익률(%)", "비중(%)"])
+            "취득원가", "평가금액", "평가손익", "수익률(%)",
+            "목표가", "손절가", "신호", "보유일", "비중(%)"])
 
     df = pd.DataFrame(rows)
     total = df["평가금액"].sum(skipna=True)
@@ -326,6 +361,50 @@ def summary(trades: pd.DataFrame, cash: pd.DataFrame,
         "비용합계": (float(trades["fee"].sum()) + float(trades["tax"].sum()))
                     if not trades.empty else 0.0,
     }
+
+
+def alerts(pos: pd.DataFrame) -> list[dict]:
+    """
+    살 때 정한 약속에 닿은 종목을 모읍니다.
+
+    왜 필요한가요?
+      목표가·손절가를 적어두게 해놓고 아무도 안 보면 적는 의미가 없습니다.
+      대부분의 손실은 '손절가를 정해뒀지만 그냥 지나친' 데서 생깁니다.
+      그래서 계좌를 열면 가장 먼저 보이게 합니다.
+
+    돌려주는 값: [{종류, 종목명, 현재가, 기준가, 말}]
+    """
+    if pos.empty or "신호" not in pos.columns:
+        return []
+
+    out = []
+    for _, r in pos.iterrows():
+        sig = r.get("신호")
+        # ※ 빈 값이 NaN 으로 들어오는데, 파이썬에서 NaN 은 '참' 으로 취급됩니다.
+        #   그래서 `if not sig` 만 쓰면 신호가 없는 종목까지 알림에 끼어듭니다.
+        if sig is None or pd.isna(sig) or not str(sig).strip():
+            continue
+        if sig == "목표가 도달":
+            out.append({
+                "종류": "목표",
+                "종목명": r["종목명"],
+                "현재가": r.get("현재가"),
+                "기준가": r.get("목표가"),
+                "말": ("살 때 정한 목표가에 닿았습니다. 팔지, 더 들고 갈지 "
+                       "지금 정하세요. '조금만 더' 하다 놓치는 일이 가장 흔합니다."),
+            })
+        else:
+            out.append({
+                "종류": "손절",
+                "종목명": r["종목명"],
+                "현재가": r.get("현재가"),
+                "기준가": r.get("손절가"),
+                "말": ("살 때 정한 손절가 아래로 내려왔습니다. **처음 산 이유가 "
+                       "아직 유효한지** 확인하세요. 이유가 사라졌다면 파는 것이 맞습니다. "
+                       "'곧 오르겠지' 는 손실을 키우는 가장 흔한 생각입니다."),
+            })
+    # 손절을 먼저 보여줍니다. 더 급한 쪽이라서입니다.
+    return sorted(out, key=lambda a: 0 if a["종류"] == "손절" else 1)
 
 
 def concentration_warnings(pos: pd.DataFrame, limit: float = 40.0) -> list[str]:

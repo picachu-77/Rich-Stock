@@ -27,10 +27,25 @@ import streamlit as st
 DECIMALS: dict[str, int] = {
     "PER": 2, "PBR": 2,
     "배당수익률(%)": 2, "ROE(%)": 2, "영업이익률(%)": 2,
+    "수익률(%)": 2, "실현수익률(%)": 2,
     "등락률(%)": 2, "고점대비(%)": 1,
     "부채비율(%)": 0, "52주위치(%)": 0,
 }
 DEFAULT_DECIMALS = 0
+
+
+def digits_for(col: str) -> int:
+    """
+    이 열은 소수점 몇 자리까지 보여줄지 정합니다.
+
+    '수익률 1년(%)' 처럼 기간이 붙은 열도 수익률이므로 2자리로 둡니다.
+    (0자리로 두면 -0.4% 가 '-0' 으로 보여 오류처럼 읽힙니다)
+    """
+    if col in DECIMALS:
+        return DECIMALS[col]
+    if col.startswith("수익률"):
+        return 2
+    return DEFAULT_DECIMALS
 
 
 def fmt(value, digits: int = 0) -> str:
@@ -50,7 +65,7 @@ def as_text(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     for col in columns:
         s = df[col]
         if pd.api.types.is_numeric_dtype(s):
-            digits = DECIMALS.get(col, DEFAULT_DECIMALS)
+            digits = digits_for(col)
             out[col] = [fmt(v, digits) for v in s]
         else:
             # 글자 열도 값이 없으면 'None' 이 찍히므로 빈 글자로 바꿉니다.
