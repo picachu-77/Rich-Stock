@@ -45,7 +45,11 @@ with tab_calc:
 
     c1, c2 = st.columns(2)
     buy_price = c1.number_input("산 가격 (1주당, 원)", min_value=0, value=50_000, step=100)
+    # 입력칸 안에는 자릿수 구분기호를 넣을 수 없어(Streamlit 제한),
+    # 바로 아래에 읽기 쉬운 형태로 다시 적어줍니다.
+    c1.caption(f"**{buy_price:,}원**")
     sell_price = c2.number_input("판 가격 (1주당, 원)", min_value=0, value=60_000, step=100)
+    c2.caption(f"**{sell_price:,}원**")
 
     c3, c4 = st.columns(2)
     qty = c3.number_input("수량 (주)", min_value=1, value=100, step=1)
@@ -84,10 +88,10 @@ with tab_calc:
 
     st.divider()
     m1, m2, m3 = st.columns(3)
-    m1.metric("화면에 보이는 수익률", f"{gross_rate:+.2f}%",
+    m1.metric("화면에 보이는 수익률", f"{gross_rate:+,.2f}%",
               help="세금·수수료를 빼기 전 숫자입니다.")
-    m2.metric("실제 수익률", f"{net_rate:+.2f}%",
-              delta=f"{net_rate - gross_rate:+.2f}%p",
+    m2.metric("실제 수익률", f"{net_rate:+,.2f}%",
+              delta=f"{net_rate - gross_rate:+,.2f}%p",
               help="세금과 수수료를 모두 뺀 뒤의 수익률입니다.")
     m3.metric("빠져나가는 비용", f"{total_cost:,.0f}원",
               help="수수료(살 때+팔 때) + 증권거래세")
@@ -119,7 +123,7 @@ with tab_calc:
         # 연환산 수익률: 같은 수익률이라도 1년에 낸 것과 5년에 낸 것은 다릅니다.
         annual = ((1 + net_rate / 100) ** (1 / holding_years) - 1) * 100
         st.caption(
-            f"보유 {holding_years:g}년 기준 **연환산 수익률은 {annual:+.2f}%** 입니다. "
+            f"보유 {holding_years:g}년 기준 **연환산 수익률은 {annual:+,.2f}%** 입니다. "
             "예금 이자율과 비교할 때는 이 값을 쓰세요."
         )
 
@@ -192,7 +196,7 @@ with tab_etf:
                     for v in chart_df[ret_col]
                 ]
             ),
-            hovertemplate="%{y}<br>" + period + " 수익률 %{x:.2f}%<extra></extra>",
+            hovertemplate="%{y}<br>" + period + " 수익률 %{x:,.2f}%<extra></extra>",
         )
     )
     fig.update_layout(
@@ -201,7 +205,7 @@ with tab_etf:
         plot_bgcolor="white",
         xaxis=dict(title=f"{period} 수익률 (%)", gridcolor="#eef2f7", zerolinecolor="#cbd5e1"),
         yaxis=dict(title=None),
-        title=dict(text=f"{period} 수익률 비교 (상위 {len(chart_df)}개)", font=dict(size=13)),
+        title=dict(text=f"{period} 수익률 비교 (상위 {len(chart_df):,}개)", font=dict(size=13)),
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 

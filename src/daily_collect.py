@@ -142,8 +142,8 @@ def main() -> None:
     print(f"  이번에 저장한 시세 : {total_saved:,}건")
     print(f"  창고 전체 시세     : {info['price_rows']:,}건")
     print(f"  보유 기간          : {info['first_date']} ~ {info['last_date']}")
-    print(f"  등록 종목 수       : {info['ticker_total']}개 "
-          f"(상장중 {info['ticker_active']}개)")
+    print(f"  등록 종목 수       : {info['ticker_total']:,}개 "
+          f"(상장중 {info['ticker_active']:,}개)")
 
 
 if __name__ == "__main__":

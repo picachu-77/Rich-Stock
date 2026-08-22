@@ -61,8 +61,8 @@ def main() -> None:
         info = summary(conn)
 
     print()
-    print(f"  현재 등록 종목 수 : {info['ticker_total']}개 "
-          f"(상장중 {info['ticker_active']}개)")
+    print(f"  현재 등록 종목 수 : {info['ticker_total']:,}개 "
+          f"(상장중 {info['ticker_active']:,}개)")
     print("완료!")
 
 

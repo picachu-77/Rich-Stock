@@ -130,10 +130,10 @@ def w52_bar(r: pd.Series) -> str:
         return ""
     pos = max(0.0, min(100.0, float(pos)))
     drop = r.get("고점대비(%)")
-    drop_txt = "" if pd.isna(drop) else f"고점 대비 {float(drop):+.0f}%"
+    drop_txt = "" if pd.isna(drop) else f"고점 대비 {float(drop):+,.0f}%"
     return (
         "<div class='w52'>"
-        f"<div class='w52-head'><span>52주 위치 {pos:.0f}%</span>"
+        f"<div class='w52-head'><span>52주 위치 {pos:,.0f}%</span>"
         f"<span>{drop_txt}</span></div>"
         "<div class='w52-bar'>"
         f"<div class='w52-dot' style='left:{pos:.0f}%'></div></div>"
@@ -156,11 +156,11 @@ def make_stock_cards(table: pd.DataFrame, limit: int = 40) -> str:
     for _, r in table.head(limit).iterrows():
         chg = r["등락률(%)"]
         cls = "" if pd.isna(chg) else ("up" if float(chg) >= 0 else "down")
-        chg_txt = "—" if pd.isna(chg) else f"{float(chg):+.2f}%"
+        chg_txt = "—" if pd.isna(chg) else f"{float(chg):+,.2f}%"
 
         ret1y = r.get("수익률 1년(%)")
         ret_cls = "" if pd.isna(ret1y) else ("up" if float(ret1y) >= 0 else "down")
-        ret_txt = "—" if pd.isna(ret1y) else f"{float(ret1y):+.1f}%"
+        ret_txt = "—" if pd.isna(ret1y) else f"{float(ret1y):+,.1f}%"
 
         cards.append(
             f"""
@@ -422,7 +422,7 @@ with st.sidebar:
         only_with_fin,
     ])
     if active:
-        st.success(f"조건 {active}개 적용 중")
+        st.success(f"조건 {active:,}개 적용 중")
     else:
         st.caption("조건 없음 — 전체 종목을 보고 있습니다.")
 
@@ -778,7 +778,7 @@ detail_bits = [str(row["시장"]), str(row["종류"])]
 if pd.notna(row["종가"]):
     detail_bits.append(f"종가 {int(row['종가']):,}원")
 if pd.notna(row["등락률(%)"]):
-    detail_bits.append(f"등락률 {float(row['등락률(%)']):+.2f}%")
+    detail_bits.append(f"등락률 {float(row['등락률(%)']):+,.2f}%")
 headline = f"### {name}  `{code}`\n\n" + "  ·  ".join(detail_bits)
 
 hist = load_history(code)
@@ -820,7 +820,7 @@ with tab_chart:
         if value is None:
             col.metric(label, "—", help="해당 기간만큼의 과거 데이터가 아직 없습니다")
         else:
-            col.metric(label, f"{value:+.2f}%")
+            col.metric(label, f"{value:+,.2f}%")
 
     range_label = st.radio(
         "차트 기간",
@@ -887,9 +887,9 @@ with tab_chart:
                 # 위쪽 '기간별 수익률' 과 헷갈리지 않게 표현을 구분합니다.
                 # 이것은 '차트에 그려진 구간의 처음 → 끝' 변동입니다.
                 text=(
-                    f"차트 구간 변동  {period_ret:+.2f}%　"
+                    f"차트 구간 변동  {period_ret:+,.2f}%　"
                     f"({plot_df['trade_date'].min():%Y-%m-%d} ~ "
-                    f"{plot_df['trade_date'].max():%Y-%m-%d}, 거래일 {len(plot_df)}일)"
+                    f"{plot_df['trade_date'].max():%Y-%m-%d}, 거래일 {len(plot_df):,}일)"
                 ),
                 font=dict(size=13),
             ),

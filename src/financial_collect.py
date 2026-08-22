@@ -287,8 +287,8 @@ def collect_period(dart: DartClient, companies: list[tuple[str, str]],
             with get_conn() as conn:
                 saved += bulk_upsert(conn, UPSERT_FINANCIAL_SQL, rows)
 
-        print(f"      묶음 {ci}/{len(chunks)}: 회사 {len(grouped)}곳 → 종목 {len(rows)}개 저장 "
-              f"(누적 {saved}개, API {dart.calls}건)")
+        print(f"      묶음 {ci}/{len(chunks)}: 회사 {len(grouped)}곳 → 종목 {len(rows):,}개 저장 "
+              f"(누적 {saved:,}개, API {dart.calls:,}건)")
 
     return saved
 
@@ -357,7 +357,7 @@ def collect_dividends(dart: DartClient, companies: list[tuple[str, str]],
 
         if i % 200 == 0:
             print(f"      배당 {i}/{len(targets)}곳 확인 "
-                  f"(적용 {updated}종목, API {dart.calls}건)")
+                  f"(적용 {updated}종목, API {dart.calls:,}건)")
 
     return updated
 
@@ -401,7 +401,7 @@ def main() -> None:
     else:
         periods = periods_for_years(args.years)
 
-    print(f"  대상 분기 : {len(periods)}개  "
+    print(f"  대상 분기 : {len(periods):,}개  "
           f"({periods[0][0]}년 {REPORT_NAME[periods[0][1]]} ~ "
           f"{periods[-1][0]}년 {REPORT_NAME[periods[-1][1]]})")
     print(f"  호출 한도 : {DART_DAILY_LIMIT:,}건에서 자동 중단")

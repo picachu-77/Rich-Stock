@@ -273,7 +273,7 @@ code_to_name = dict(zip(df["종목코드"], df["종목명"]))
 st.subheader("1. 비교할 종목 고르기")
 
 picked_labels = st.multiselect(
-    f"종목 이름이나 코드를 입력해 고르세요 (최대 {MAX_PICK}개)",
+    f"종목 이름이나 코드를 입력해 고르세요 (최대 {MAX_PICK:,}개)",
     options=sorted(label_to_code.keys()),
     max_selections=MAX_PICK,
     key="cmp_pick",

@@ -132,7 +132,7 @@ st.info(
 )
 
 st.caption(
-    f"모두 {len(TERMS)}개 용어 · 각 용어는 **한 줄 뜻 → 자세한 설명 → 숫자 예시 → "
+    f"모두 {len(TERMS):,}개 용어 · 각 용어는 **한 줄 뜻 → 자세한 설명 → 숫자 예시 → "
     "유튜브 영상 찾기** 순서로 되어 있습니다. 용어 제목을 누르면 펼쳐집니다."
 )
 
@@ -179,7 +179,7 @@ if not hits:
     st.stop()
 
 if searching:
-    st.success(f"검색 결과 {len(hits)}개 — 아래 항목은 자동으로 펼쳐져 있습니다.")
+    st.success(f"검색 결과 {len(hits):,}개 — 아래 항목은 자동으로 펼쳐져 있습니다.")
 
 # ── 분류별로 묶어서 보여주기 ──────────────────────────────────
 for category in CATEGORY_ORDER:
@@ -188,7 +188,7 @@ for category in CATEGORY_ORDER:
         continue
 
     st.markdown(
-        f"<div class='cat-head'>{category} <span>· {len(group)}개</span></div>",
+        f"<div class='cat-head'>{category} <span>· {len(group):,}개</span></div>",
         unsafe_allow_html=True,
     )
     for term in group:

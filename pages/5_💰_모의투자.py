@@ -68,6 +68,26 @@ def money(v, digits: int = 0) -> str:
     return f"{float(v):,.{digits}f}원"
 
 
+def _in_words(amount: float) -> str:
+    """
+    큰 금액을 '억/만' 단위로 덧붙여 읽어줍니다.
+
+    1000000 처럼 0 이 많은 숫자는 자릿수를 세어야 얼마인지 알 수 있습니다.
+    '100만원' 이라고 함께 적어주면 한눈에 들어옵니다.
+    """
+    n = int(amount or 0)
+    if n < 10_000:
+        return ""
+    억, 나머지 = divmod(n, 100_000_000)
+    만 = 나머지 // 10_000
+    parts = []
+    if 억:
+        parts.append(f"{억:,}억")
+    if 만:
+        parts.append(f"{만:,}만")
+    return f"  ({''.join(parts)}원)" if parts else ""
+
+
 def signed(v, digits: int = 0) -> str:
     """손익처럼 부호가 중요한 값."""
     if v is None or pd.isna(v):
@@ -146,7 +166,7 @@ c2.metric("현금", money(현금), help="아직 안 쓴 돈")
 수익률 = acct["총수익률(%)"]
 # 수익률이 아주 작으면 '-0.00%' 처럼 찍혀 오류로 보입니다. 그럴 땐 아예 감춥니다.
 delta_txt = (None if 수익률 is None or abs(수익률) < 0.01
-             else f"{수익률:+.2f}%")
+             else f"{수익률:+,.2f}%")
 c3.metric("총손익", signed(손익), delta=delta_txt,
           help="총자산 − 내가 넣은 돈")
 c4.metric("투자원금", money(acct["투자원금"]), help="예수금으로 넣은 돈의 합계")
@@ -229,7 +249,7 @@ with tab_acct:
     m2.metric("평가손익", signed(acct["평가손익"]),
               help="아직 안 판 종목의 손익입니다. 확정된 것이 아닙니다.")
     승률 = acct["승률(%)"]
-    m3.metric("승률", "—" if 승률 is None else f"{승률:.0f}%",
+    m3.metric("승률", "—" if 승률 is None else f"{승률:,.0f}%",
               help=f"판 {acct['매도횟수']}번 중 이익을 본 횟수의 비율")
     m4.metric("낸 비용", money(acct["비용합계"]),
               help="수수료와 증권거래세를 모두 더한 금액입니다.")
@@ -285,7 +305,10 @@ with tab_trade:
                     key="buy_price",
                     help="지금 시세로 사는 것이 기본입니다. 바꿔서 연습해 볼 수도 있습니다.",
                 )
+                b1.caption(f"**{money(buy_price)}**{_in_words(buy_price)}")
+
                 qty = b2.number_input("수량 (주)", min_value=1, value=1, step=1, key="buy_qty")
+                b2.caption(f"**{qty:,}주**")
 
                 amount = buy_price * qty
                 fee, _ = costs(amount, "BUY")
@@ -413,9 +436,12 @@ with tab_trade:
             sell_price = v1.number_input(
                 "팔 가격 (1주, 원)", min_value=1, value=int(now), step=10, key="sell_price"
             )
+            v1.caption(f"**{money(sell_price)}**{_in_words(sell_price)}")
+
             sell_qty = v2.number_input(
                 "수량 (주)", min_value=1, max_value=have, value=have, step=1, key="sell_qty"
             )
+            v2.caption(f"**{sell_qty:,}주** (가진 {have:,}주 중)")
 
             amount = sell_price * sell_qty
             fee, tax = costs(amount, "SELL")
@@ -429,7 +455,7 @@ with tab_trade:
             )
             st.markdown(
                 f"산 값 **{money(들인돈)}** 대비 → 실현손익 **{signed(손익)}** "
-                f"({(손익 / 들인돈 * 100) if 들인돈 else 0:+.2f}%)"
+                f"({(손익 / 들인돈 * 100) if 들인돈 else 0:+,.2f}%)"
             )
 
             sell_reason = st.text_area(
@@ -539,6 +565,11 @@ with tab_cash:
     amount = d1.number_input(
         "금액 (원)", min_value=0, value=1_000_000, step=100_000, key="cash_amt"
     )
+    # 입력칸 자체에는 자릿수 구분기호를 넣을 수 없습니다(Streamlit 제한).
+    # 그래서 입력한 금액을 바로 아래에 읽기 쉬운 형태로 다시 적어줍니다.
+    #   1000000 → "1,000,000원 (백만원)"
+    d1.caption(f"**{money(amount)}**{_in_words(amount)}")
+
     direction = d2.radio("구분", ["넣기 (입금)", "빼기 (출금)"],
                          horizontal=True, key="cash_dir")
     memo = st.text_input("메모 (선택)", key="cash_memo", placeholder="예: 연습 시작 자금")

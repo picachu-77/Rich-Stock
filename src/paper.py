@@ -343,7 +343,7 @@ def concentration_warnings(pos: pd.DataFrame, limit: float = 40.0) -> list[str]:
     for _, r in pos.iterrows():
         w = r.get("비중(%)")
         if pd.notna(w) and float(w) >= limit:
-            out.append(f"**{r['종목명']}** 한 종목이 {float(w):.0f}% 를 차지합니다")
+            out.append(f"**{r['종목명']}** 한 종목이 {float(w):,.0f}% 를 차지합니다")
 
     by_sector = pos.groupby("업종")["평가금액"].sum()
     total = by_sector.sum()
@@ -351,5 +351,5 @@ def concentration_warnings(pos: pd.DataFrame, limit: float = 40.0) -> list[str]:
         for sector, amount in by_sector.items():
             share = amount / total * 100
             if sector != "업종 미상" and share >= 60:
-                out.append(f"**{sector}** 업종에 {share:.0f}% 가 몰려 있습니다")
+                out.append(f"**{sector}** 업종에 {share:,.0f}% 가 몰려 있습니다")
     return out

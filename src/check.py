@@ -103,12 +103,12 @@ def check_tables() -> bool:
                 print("       해결: .venv\\Scripts\\python.exe -m src.create_tables")
                 return False
 
-            print(f"{OK} 표 {len(expected)}개 모두 있습니다: {', '.join(names)}")
+            print(f"{OK} 표 {len(expected):,}개 모두 있습니다: {', '.join(names)}")
 
             from .store import summary
 
             info = summary(conn)
-            print(f"       등록 종목 : {info['ticker_total']}개")
+            print(f"       등록 종목 : {info['ticker_total']:,}개")
             print(f"       시세 데이터: {info['price_rows']:,}건")
             if info["first_date"]:
                 print(f"       보유 기간 : {info['first_date']} ~ {info['last_date']}")
@@ -194,7 +194,7 @@ def check_dart() -> bool | None:
         if str(data.get("status")) != "000":
             print(f"{NG} DART 응답 이상: {data.get('status')} {data.get('message')}")
             return False
-        print(f"{OK} 삼성전자 재무제표 {len(data.get('list', []))}개 계정 수신 성공.")
+        print(f"{OK} 삼성전자 재무제표 {len(data.get('list', [])):,}개 계정 수신 성공.")
     except Exception as exc:  # noqa: BLE001
         print(f"{NG} {exc}")
         return False

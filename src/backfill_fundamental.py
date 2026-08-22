@@ -72,8 +72,8 @@ def main() -> None:
     print(" 과거 투자지표(PER/PBR/EPS/BPS/배당) 채우기")
     print("=" * 66)
     if all_days:
-        print(f"  보유 거래일 : {all_days[0]} ~ {all_days[-1]}  ({len(all_days)}일)")
-    print(f"  받을 날짜   : {len(todo)}일")
+        print(f"  보유 거래일 : {all_days[0]} ~ {all_days[-1]}  ({len(all_days):,}일)")
+    print(f"  받을 날짜   : {len(todo):,}일")
     print("  중간에 멈춰도 다시 실행하면 이어서 받습니다.")
     print()
 
@@ -132,7 +132,7 @@ def main() -> None:
     print(f"  지표가 있는 줄 : {filled:,}건 / 전체 {total_rows:,}건")
     print("  (ETF 는 거래소가 지표를 주지 않아 빈칸입니다 — 정상입니다)")
     if failed:
-        print(f"\n  [!] 실패한 날짜 {len(failed)}일. 다시 실행하면 그 날만 재시도합니다.")
+        print(f"\n  [!] 실패한 날짜 {len(failed):,}일. 다시 실행하면 그 날만 재시도합니다.")
 
 
 if __name__ == "__main__":

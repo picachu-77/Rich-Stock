@@ -97,7 +97,7 @@ def main() -> None:
     todo = [d for d in all_days if d not in done_stock or d not in done_etf]
 
     print(f"[2/2] 일별 시세 수집")
-    print(f"  전체 평일 {len(all_days)}일 중, 아직 안 받은 날 {len(todo)}일")
+    print(f"  전체 평일 {len(all_days):,}일 중, 아직 안 받은 날 {len(todo):,}일")
     if not todo:
         print("\n  이미 전부 받았습니다. 할 일이 없습니다.")
         return
@@ -177,9 +177,9 @@ def main() -> None:
     print(f"  총 소요시간   : {fmt_eta(time.time() - started)}")
     print(f"  저장된 시세   : {info['price_rows']:,}건")
     print(f"  보유 기간     : {info['first_date']} ~ {info['last_date']}")
-    print(f"  등록 종목 수  : {info['ticker_total']}개")
+    print(f"  등록 종목 수  : {info['ticker_total']:,}개")
     if failed:
-        print(f"\n  [!] 실패한 날짜 {len(failed)}일: {failed[:10]}"
+        print(f"\n  [!] 실패한 날짜 {len(failed):,}일: {failed[:10]}"
               f"{' ...' if len(failed) > 10 else ''}")
         print("      이 스크립트를 한 번 더 실행하면 실패한 날만 다시 시도합니다.")
 

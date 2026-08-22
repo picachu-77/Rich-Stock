@@ -250,7 +250,7 @@ def read_sentence(stats: dict) -> str:
 
     if metric == "배당수익률":
         base = (
-            f"지금 배당수익률 **{now}** 은 최근 3년 중 **{pct:.0f}% 지점**입니다. "
+            f"지금 배당수익률 **{now}** 은 최근 3년 중 **{pct:,.0f}% 지점**입니다. "
             f"(3년 보통 수준은 {mid})"
         )
         if grade in ("cheap", "cheapish"):
@@ -266,7 +266,7 @@ def read_sentence(stats: dict) -> str:
         return f"{base}\n\n{caution}"
 
     base = (
-        f"지금 {metric} **{now}** 은 최근 3년 중 **{pct:.0f}% 지점**입니다. "
+        f"지금 {metric} **{now}** 은 최근 3년 중 **{pct:,.0f}% 지점**입니다. "
         f"(3년 보통 수준은 {mid})"
     )
 

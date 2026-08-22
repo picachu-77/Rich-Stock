@@ -320,7 +320,7 @@ def bar(label: str, score: float | None) -> str:
     return (
         f"<div class='bar-wrap'><span class='bar-label'>{label}</span>"
         f"<div class='bar-bg'><div class='bar-fill' style='width:{pct:.0f}%;background:{color}'></div></div>"
-        f"<span class='bar-val'>{pct:.0f}</span></div>"
+        f"<span class='bar-val'>{pct:,.0f}</span></div>"
     )
 
 
@@ -340,7 +340,7 @@ for i, row in top.iterrows():
         # 자세한 업종에 회사가 적어 큰 묶음으로 비교했다면 그 이름을 함께 적습니다.
         where = "업종 내" if basis == sector else f"{basis} 내"
         tag += (f"<span class='sector-tag'>{where} "
-                f"{int(row['업종내순위'])}위 / {int(row['업종내총수'])}개</span>")
+                f"{int(row['업종내순위'])}위 / {int(row['업종내총수']):,}개</span>")
     elif score_mode == "같은 업종 비교":
         tag += ("<span class='sector-tag plain'>같은 업종 회사가 적어 "
                 "공통 기준으로 채점</span>")
@@ -352,7 +352,7 @@ for i, row in top.iterrows():
             <div class="rank-no {'top' if rank <= 3 else ''}">{rank}</div>
             <div><span class="rank-name">{row['종목명']}</span>
                  <span class="rank-code">{row['종목코드']} · {row['시장']}</span></div>
-            <div class="rank-total">{row['총점']:.0f}<span> / 100</span></div>
+            <div class="rank-total">{row['총점']:,.0f}<span> / 100</span></div>
           </div>
           <div class="sector-row">{tag}</div>
           {''.join(bar(g, row[f'묶음_{g}']) for g in GROUPS)}
@@ -369,8 +369,8 @@ for i, row in top.iterrows():
         est_years = row.get("업력(년)")
         track_txt = "자료 없음"
         if pd.notna(row.get("보고서수")) and row.get("보고서수"):
-            track_txt = (f"최근 {int(row['보고서수'])}개 보고서 중 "
-                         f"{int(row['흑자분기수'])}개 흑자")
+            track_txt = (f"최근 {int(row['보고서수']):,}개 보고서 중 "
+                         f"{int(row['흑자분기수']):,}개 흑자")
         st.markdown(
             f"""
             <div class="fact-grid">
@@ -429,7 +429,7 @@ for i, row in top.iterrows():
         )
 
         st.caption(
-            f"현재 주가 {row['종가']:,}원 · 등락률 {row['등락률(%)']:+.2f}% · "
+            f"현재 주가 {row['종가']:,}원 · 등락률 {row['등락률(%)']:+,.2f}% · "
             f"시가총액 {row['시가총액(억)']:,}억원"
             + (f" · 재무 기준 {row['재무 기준']}" if pd.notna(row.get("재무 기준")) else "")
         )

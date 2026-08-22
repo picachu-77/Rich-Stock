@@ -104,7 +104,7 @@ def main() -> None:
     print()
     print("=" * 62)
     print(f" 완료!  회사코드가 연결된 종목: {total_with_code:,}개")
-    print(f" DART API 호출: {dart.calls}건 (하루 한도 20,000건)")
+    print(f" DART API 호출: {dart.calls:,}건 (하루 한도 20,000건)")
     print("=" * 62)
 
 

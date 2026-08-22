@@ -247,7 +247,7 @@ def main() -> None:
         "paper_cash": "모의투자 예수금",
     }
     for name, col_count in tables:
-        print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count}개)")
+        print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count:,}개)")
 
     expected = 7
     if len(tables) == expected:
