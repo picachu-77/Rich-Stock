@@ -190,6 +190,58 @@ _CSS = """
   .stock-card .sc-risk:empty { display: none; }
   .risk-box { margin: .3rem 0 .6rem 0; }
 
+  /* ── 8-2b. 모의투자 '연습' 화면 ────────────────────────────
+     연습 단계 목록 · 습관 점수 막대.
+     한 줄에 '무엇을 / 몇 점 / 지금 얼마' 가 같이 보여야 훑어보기 좋습니다. */
+  .mission {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: .5rem .7rem; margin: .3rem 0; background: #fff;
+    font-size: .9rem; line-height: 1.5;
+  }
+  .mission.done { background: #f6fef9; border-color: #a6f4c5; color: #05603a; }
+  .mission-desc { color: var(--ink-soft); font-size: .82rem; }
+
+  .score-box {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: .8rem 1rem; margin: .2rem 0 .8rem 0; background: #f8fafc;
+  }
+  .score-num   { font-size: 2.2rem; font-weight: 900; color: var(--ink); }
+  .score-max   { font-size: .9rem; color: var(--ink-soft); margin-left: .3rem; }
+  .score-grade {
+    margin-left: .6rem; font-size: .78rem; font-weight: 800;
+    border-radius: 999px; padding: .18rem .6rem;
+    background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff;
+  }
+  .score-say { margin-top: .35rem; font-size: .88rem; color: var(--ink-soft); }
+
+  .habit { margin: .55rem 0 .1rem 0; font-size: .9rem; }
+  .habit-score {
+    margin-left: .5rem; font-weight: 800; font-size: .82rem;
+    border-radius: 999px; padding: .1rem .5rem;
+  }
+  .habit-score.good { color: #027a48; background: #ecfdf3; }
+  .habit-score.mid  { color: #b54708; background: #fffaeb; }
+  .habit-score.bad  { color: #b42318; background: #fef3f2; }
+  .habit-val { margin-left: .5rem; color: var(--ink-soft); font-size: .82rem; }
+  .habit-bar {
+    height: 7px; border-radius: 999px; background: #eef2f6;
+    margin-top: .3rem; overflow: hidden;
+  }
+  .habit-bar i { display: block; height: 100%; border-radius: 999px; }
+  .habit-bar i.good { background: #12b76a; }
+  .habit-bar i.mid  { background: #f79009; }
+  .habit-bar i.bad  { background: #f04438; }
+
+  /* 복기 카드 — 계획대로 했는지 한 줄로 */
+  .rv {
+    border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px;
+    padding: .55rem .75rem; margin: .35rem 0; background: #fff; font-size: .9rem;
+  }
+  .rv.ok { border-left-color: #12b76a; background: #f6fef9; }
+  .rv.no { border-left-color: #f04438; background: #fffbfa; }
+  .rv-head { font-weight: 800; }
+  .rv-sub  { color: var(--ink-soft); font-size: .82rem; margin-top: .2rem; }
+
   /* ── 8-3. 52주 위치 막대 ───────────────────────────────────── */
   .w52 { margin: .5rem 0 .1rem 0; }
   .w52-head, .w52-ends {

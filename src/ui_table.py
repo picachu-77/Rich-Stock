@@ -38,12 +38,14 @@ def digits_for(col: str) -> int:
     """
     이 열은 소수점 몇 자리까지 보여줄지 정합니다.
 
-    '수익률 1년(%)' 처럼 기간이 붙은 열도 수익률이므로 2자리로 둡니다.
+    '수익률 1년(%)' · '평균수익률(%)' 처럼 앞뒤에 말이 붙은 열도 수익률이므로
+    2자리로 둡니다.
     (0자리로 두면 -0.4% 가 '-0' 으로 보여 오류처럼 읽힙니다)
     """
     if col in DECIMALS:
         return DECIMALS[col]
-    if col.startswith("수익률"):
+    # '평균수익률(%)' · '실현수익률(%)' 처럼 앞에 말이 붙어도 수익률입니다.
+    if "수익률" in col:
         return 2
     return DEFAULT_DECIMALS
 

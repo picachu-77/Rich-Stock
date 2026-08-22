@@ -1,21 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-모의투자(가상 매매) 화면 — 진짜 돈을 쓰기 전에 연습하는 곳.
+모의투자 화면 — 진짜 돈을 쓰기 전에 **투자를 연습하는 곳**.
 
-여기서 하는 일
-  실제로 사지 않고 '샀다 치고' 기록만 남깁니다. 그리고 지금 시세로
-  얼마가 됐을지 계산해서 보여줍니다.
+이 화면의 목적은 '얼마 벌었나' 가 아닙니다
+  가짜 돈으로 번 수익률은 아무 의미가 없습니다. 몇 번 안 되는 매매에서
+  결과는 거의 운입니다. 그래서 여기서는 **판단하는 습관**을 봅니다.
 
-왜 필요한가요?
-  머릿속으로 "그때 샀으면 벌었을 텐데" 하는 기억은 거의 항상 실제보다
-  후합니다. 잘된 것만 기억하고 틀린 것은 잊기 때문입니다.
-  적어두어야만 내 판단이 실제로 어땠는지 알 수 있습니다.
+    · 살 이유를 정하고 사는가
+    · 팔 기준(목표가·손절가)을 **사기 전에** 정하는가
+    · 정해둔 기준을 실제로 지키는가
+    · 한 곳에 몰지 않고, 너무 자주 사고팔지 않는가
 
-살 때 이유를 적어두길 권합니다
-  이유 없이 산 종목은 팔 때도 기준이 없습니다. 다만 매번 적기 번거로우므로
-  적지 않아도 살 수 있게 두었습니다. 적어두면 팔 때 다시 보여드립니다.
+  이 네 가지는 실제 돈을 넣었을 때 그대로 따라옵니다. 연습으로 고칠 수
+  있는 것도 이 네 가지뿐입니다. 그래서 이것만 점수로 봅니다.
 
-  실제로 매수를 막는 것은 '현금 부족' 하나뿐입니다.
+화면 구성
+  🎓 연습     — 무엇부터 해볼지, 내 습관은 몇 점인지
+  💼 내 계좌  — 지금 들고 있는 것
+  🛒 사고팔기 — 사고파는 곳 (살 때 이유의 '종류' 를 함께 고릅니다)
+  🔍 복기     — 판 뒤에 '계획대로 했는지' 되돌아보는 곳
+  💵 예수금   — 연습에 쓸 돈
+
+  실제로 매수를 막는 것은 '현금 부족' 하나뿐입니다. 나머지는 알려주기만
+  하고 막지 않습니다. 막아버리면 연습이 아니라 시험이 됩니다.
 """
 
 from __future__ import annotations
@@ -47,6 +54,19 @@ from src.paper import (
     positions,
     summary,
     walk,
+)
+from src.practice import (
+    BUY_REASONS,
+    SELL_REASONS,
+    by_reason,
+    coach,
+    grade,
+    habits,
+    missions,
+    overall,
+    reviews,
+    tag,
+    untag,
 )
 from src.search import search
 from src.ui_korean import apply_korean_ui, josa
@@ -98,10 +118,32 @@ def signed(v, digits: int = 0) -> str:
     return f"{float(v):+,.{digits}f}원"
 
 
-st.title("💰 모의투자")
+def flash(msg: str, kind: str = "success") -> None:
+    """
+    다음 화면에 뜰 안내문을 적어둡니다.
+
+    왜 필요한가요?
+      st.success() 로 안내를 띄운 직후 st.rerun() 을 하면 화면이 새로 그려지면서
+      그 안내가 사라집니다. 그러면 사고팔기 버튼을 눌러도 아무 반응이 없는 것처럼
+      보입니다. 그래서 안내문을 잠깐 적어뒀다가 새로 그린 화면에서 보여줍니다.
+    """
+    st.session_state["_알림"] = (kind, msg)
+
+
+def show_flash() -> None:
+    """적어둔 안내문이 있으면 한 번 보여주고 지웁니다."""
+    got = st.session_state.pop("_알림", None)
+    if not got:
+        return
+    kind, msg = got
+    (st.success if kind == "success" else st.info)(msg)
+
+
+st.title("💰 모의투자 — 연습장")
 st.caption(
-    "**진짜 돈은 한 푼도 쓰지 않습니다.** 사고팔았다고 적어두면, 지금 시세로 "
-    "얼마가 됐을지 계산해서 보여줍니다. 실제로 사기 전에 내 판단을 시험해 보는 곳입니다."
+    "**진짜 돈은 한 푼도 쓰지 않습니다.** 여기서 보는 것은 '얼마 벌었나' 가 아니라 "
+    "**어떻게 판단하는가** 입니다. 가짜 돈으로 낸 수익률은 거의 운이지만, "
+    "기준을 정하고 지키는 습관은 실제 돈을 넣어도 그대로 따라옵니다."
 )
 
 # ── 데이터 읽기 ───────────────────────────────────────────────
@@ -153,15 +195,27 @@ pos = positions(trades, price_of, name_of, sector_of)
 acct = summary(trades, cash, price_of)
 현금 = acct["현금"]
 
+# ── 연습 성적 계산 ───────────────────────────────────────────
+# 수익률과 따로 계산합니다. 여기서 중요한 것은 번 돈이 아니라
+# '어떻게 판단했는가' 이기 때문입니다. → src/practice.py
+_, closed = walk(trades)
+rev = reviews(closed, name_of)
+습관 = habits(trades, closed, pos, acct["투자원금"])
+연습점수 = overall(습관)
+등급, 등급말 = grade(연습점수)
+
 # ── 처음 오신 분 안내 ─────────────────────────────────────────
 if cash.empty and trades.empty:
     st.info(
-        "### 시작해 볼까요?\n\n"
-        "먼저 **💵 예수금** 탭에서 연습에 쓸 돈을 넣어주세요. "
-        "실제 투자할 만한 금액으로 하시는 편이 연습이 됩니다. "
-        "(너무 큰 돈으로 하면 실제 감각과 달라집니다)\n\n"
-        "그다음 **🛒 사고팔기** 탭에서 종목을 골라 사시면 됩니다."
+        "### 처음이시군요\n\n"
+        "이곳은 **투자를 연습하는 곳**입니다. 돈을 벌어보는 곳이 아닙니다.\n\n"
+        "**🎓 연습** 탭에 무엇부터 해볼지 순서대로 적어두었습니다. "
+        "그대로 따라 해보시면 됩니다. 첫 번째 할 일은 **💵 예수금** 탭에서 "
+        "연습에 쓸 돈을 넣는 것입니다."
     )
+
+# 방금 사고팔거나 돈을 넣은 결과를 알려줍니다. (화면을 새로 그려도 남습니다)
+show_flash()
 
 # ── 계좌 현황 ─────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
@@ -175,14 +229,121 @@ c2.metric("현금", money(현금), help="아직 안 쓴 돈")
 delta_txt = (None if 수익률 is None or abs(수익률) < 0.01
              else f"{수익률:+,.2f}%")
 c3.metric("총손익", signed(손익), delta=delta_txt,
-          help="총자산 − 내가 넣은 돈")
-c4.metric("투자원금", money(acct["투자원금"]), help="예수금으로 넣은 돈의 합계")
+          help="총자산 − 내가 넣은 돈. **연습에서는 이 숫자가 가장 덜 중요합니다.**")
+
+# ★ 네 번째 자리에 '투자원금' 대신 습관 점수를 둡니다 ★
+#   어느 탭에 있든 '여기서 봐야 할 것은 수익률이 아니다' 가 보이도록.
+# delta 로 등급을 넣으면 Streamlit 이 화살표(↑)를 함께 그립니다.
+# '보통' 옆에 오르는 화살표가 붙으면 '점수가 올랐다'로 잘못 읽히므로
+# 값 안에 등급을 같이 적습니다.
+c4.metric(
+    "판단 습관",
+    "—" if 연습점수 is None else f"{연습점수:,.0f}점 · {등급}",
+    help="기준을 정하고 지키는 습관을 0~100점으로 본 것입니다. "
+         "**수익률과는 상관없습니다.** 자세한 내용은 🎓 연습 탭에 있습니다.",
+)
 
 st.divider()
 
-tab_acct, tab_trade, tab_log, tab_cash = st.tabs(
-    ["💼 내 계좌", "🛒 사고팔기", "📔 거래 내역", "💵 예수금"]
+# key 를 주면 고른 탭이 기억됩니다.
+#   이게 없으면 사거나 팔 때마다 화면이 새로 그려지면서 첫 탭(🎓 연습)으로
+#   튕겨 나갑니다. 연달아 두 종목을 사려면 매번 탭을 다시 눌러야 해서
+#   연습이 끊깁니다.
+tab_learn, tab_acct, tab_trade, tab_log, tab_cash = st.tabs(
+    ["🎓 연습", "💼 내 계좌", "🛒 사고팔기", "🔍 복기", "💵 예수금"],
+    key="paper_tabs",
 )
+
+# ══════════════════════════════════════════════════════════════
+#  🎓 연습 — 무엇부터 해볼지 · 내 습관은 몇 점인지
+# ══════════════════════════════════════════════════════════════
+with tab_learn:
+    st.markdown(
+        "> **여기서 잘한다는 것은 돈을 많이 벌었다는 뜻이 아닙니다.**\n"
+        "> 가짜 돈으로 낸 수익률은 대부분 운입니다. 운은 다음에 또 오지 않지만, "
+        "습관은 실제 돈을 넣어도 똑같이 따라옵니다. 그래서 습관만 봅니다."
+    )
+
+    # ── ① 연습 단계 ──
+    st.subheader("① 이 순서로 해보세요")
+    todo = missions(trades, cash, pos, closed)
+    끝난수 = sum(1 for m in todo if m["끝남"])
+    st.progress(끝난수 / len(todo),
+                text=f"{끝난수:,}단계 / {len(todo):,}단계 끝냈습니다")
+
+    for m in todo:
+        값 = f"  ·  지금 {m['지금값']}" if m["지금값"] else ""
+        if m["끝남"]:
+            st.markdown(
+                f"<div class='mission done'>✅ <b>{m['제목']}</b>{값}</div>",
+                unsafe_allow_html=True)
+        else:
+            st.markdown(
+                f"<div class='mission'>⬜ <b>{m['제목']}</b>{값}"
+                f"<br><span class='mission-desc'>{m['설명']}</span></div>",
+                unsafe_allow_html=True)
+
+    st.caption(
+        "순서대로 하지 않아도 됩니다. 다만 **팔 기준을 정하고 사보기** 와 "
+        "**정한 기준대로 팔아보기** 는 꼭 해보세요. 실제 투자에서 초보자와 "
+        "그렇지 않은 사람을 가르는 것이 거의 이 두 가지입니다."
+    )
+
+    # ── ② 습관 점수 ──
+    st.divider()
+    st.subheader("② 내 판단 습관")
+
+    if 연습점수 is None:
+        st.info(
+            "아직 점수를 낼 자료가 없습니다. 한 종목이라도 사고팔아 보시면 "
+            "여기에 습관이 나타납니다."
+        )
+    else:
+        st.markdown(
+            f"<div class='score-box'><span class='score-num'>{연습점수:,.0f}</span>"
+            f"<span class='score-max'>/ 100점</span>"
+            f"<span class='score-grade'>{등급}</span>"
+            f"<div class='score-say'>{등급말}</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    for h in 습관:
+        점 = h["점수"]
+        if 점 is None:
+            st.markdown(
+                f"<div class='habit'><b>{h['항목']}</b>"
+                f"<span class='habit-val'>{h['값글']}</span></div>",
+                unsafe_allow_html=True)
+            continue
+        색 = "good" if 점 >= 80 else ("mid" if 점 >= 50 else "bad")
+        st.markdown(
+            f"<div class='habit'><b>{h['항목']}</b>"
+            f"<span class='habit-score {색}'>{점:,.0f}점</span>"
+            f"<span class='habit-val'>{h['값글']}</span>"
+            f"<div class='habit-bar'><i class='{색}' style='width:{max(2, min(100, 점)):,.0f}%'></i></div>"
+            f"</div>",
+            unsafe_allow_html=True)
+        # 잘하고 있는 항목까지 설명을 달면 화면이 길어지기만 합니다.
+        # 고쳐야 할 것(80점 미만)에만 '왜 중요한지' 를 붙입니다.
+        if 점 < 80:
+            with st.expander(f"'{h['항목']}' 가 왜 중요한가요?"):
+                st.markdown(h["말"])
+
+    # ── ③ 지금 고칠 것 ──
+    tips = coach(습관, rev)
+    if tips:
+        st.divider()
+        st.subheader("③ 지금 하나만 고친다면")
+        st.caption("고칠 것을 여러 개 주면 아무것도 안 고쳐집니다. 하나씩 올려보세요.")
+        for t in tips:
+            st.warning(t)
+
+    st.divider()
+    st.caption(
+        "⚠️ 여기서 점수가 높다고 실제로도 잘된다는 뜻은 아닙니다. 진짜 돈이 걸리면 "
+        "손이 떨리고, 원하는 가격에 사고팔지 못하는 일도 많습니다. "
+        "다만 **여기서도 못 지키는 기준은 실제 돈으로는 절대 못 지킵니다.**"
+    )
 
 # ══════════════════════════════════════════════════════════════
 #  💼 내 계좌
@@ -296,25 +457,31 @@ with tab_acct:
               help="이미 팔아서 확정된 손익입니다.")
     m2.metric("평가손익", signed(acct["평가손익"]),
               help="아직 안 판 종목의 손익입니다. 확정된 것이 아닙니다.")
-    승률 = acct["승률(%)"]
-    m3.metric("승률", "—" if 승률 is None else f"{승률:,.0f}%",
-              help=f"판 {acct['매도횟수']}번 중 이익을 본 횟수의 비율")
+    지킨 = int(rev["잘함"].sum()) if not rev.empty else 0
+    m3.metric("계획대로 판 횟수",
+              "—" if rev.empty else f"{지킨:,} / {len(rev):,}번",
+              help="살 때 정한 목표가·손절가대로 팔았는지. "
+                   "**연습에서는 승률보다 이 숫자가 중요합니다.**")
     m4.metric("낸 비용", money(acct["비용합계"]),
-              help="수수료와 증권거래세를 모두 더한 금액입니다.")
+              help="수수료와 증권거래세를 모두 더한 금액입니다. "
+                   "사고팔 때마다 벌든 잃든 나갑니다.")
 
     if acct["매도횟수"] >= 3:
+        승률 = acct["승률(%)"]
+        승률글 = "—" if 승률 is None else f"{승률:,.0f}%"
         st.caption(
-            f"판 횟수 {acct['매도횟수']}번 · 이긴 {acct['이긴횟수']}번 / "
-            f"진 {acct['진횟수']}번\n\n"
+            f"참고 — 판 횟수 {acct['매도횟수']:,}번 · 이긴 {acct['이긴횟수']:,}번 / "
+            f"진 {acct['진횟수']:,}번 (승률 {승률글})\n\n"
             "**승률이 높다고 잘하는 것은 아닙니다.** 조금씩 여러 번 이기고 "
-            "한 번 크게 지면 결국 손해입니다. 승률보다 **실현손익 합계**를 보세요."
+            "한 번 크게 지면 결국 손해입니다. 그리고 몇 번 안 되는 매매에서 "
+            "승률은 대부분 운입니다. 🎓 연습 탭의 **판단 습관** 을 보세요."
         )
 
 # ══════════════════════════════════════════════════════════════
 #  🛒 사고팔기
 # ══════════════════════════════════════════════════════════════
 with tab_trade:
-    buy_tab, sell_tab = st.tabs(["🔴 사기", "🔵 팔기"])
+    buy_tab, sell_tab = st.tabs(["🔴 사기", "🔵 팔기"], key="paper_side")
 
     # ── 사기 ──
     with buy_tab:
@@ -367,20 +534,40 @@ with tab_trade:
                     f"= 필요한 돈 **{money(need)}**"
                 )
 
-                st.markdown("##### 왜 사시나요? (선택)")
+                st.markdown("##### 왜 사시나요?")
+                st.caption(
+                    "가장 가까운 것을 하나 고르세요. 나중에 **어떤 이유로 샀을 때 "
+                    "잘 됐는지**를 종류별로 모아서 보여드립니다. 자기가 무엇 때문에 "
+                    "잃는지 아는 것이 연습에서 가장 크게 남습니다."
+                )
+                buy_kind = st.radio(
+                    "사는 이유 종류",
+                    [k for k, _ in BUY_REASONS] + ["고르지 않음"],
+                    horizontal=True, key="buy_kind",
+                )
+                설명 = dict(BUY_REASONS).get(buy_kind)
+                if 설명:
+                    st.caption(f"↳ {설명}")
+                if buy_kind == "그냥 느낌으로":
+                    # 솔직하게 고른 것을 나무라지 않습니다. 다만 이 종류가 나중에
+                    # 어떤 성적을 내는지 직접 보게 되는 편이 훨씬 오래 남습니다.
+                    st.info(
+                        "솔직하게 고르셨습니다. 그대로 사셔도 됩니다. "
+                        "이 종류로 산 것들이 나중에 어떤 성적을 냈는지 "
+                        "🔍 복기 탭에서 직접 확인해 보세요."
+                    )
+
                 reason = st.text_area(
-                    "사는 이유",
+                    "덧붙일 말 (선택)",
                     key="buy_reason",
                     placeholder="예: 3년 PER 하위 10% 구간이고 매출이 3년째 늘고 있음. "
                                 "반도체 업황 회복 기대.",
-                    help="적어두면 나중에 📔 거래 내역에서 다시 읽어볼 수 있습니다. "
-                         "비워두고 사셔도 됩니다.",
+                    help="비워두셔도 됩니다. 적어두면 팔 때 다시 보여드립니다.",
                 )
                 if not reason.strip():
                     st.caption(
-                        "비워두셔도 살 수 있습니다. 다만 한 줄이라도 적어두면 나중에 "
-                        "**'그때 왜 샀더라'** 를 알 수 있어서, 같은 실수를 반복하는지 "
-                        "확인할 수 있습니다."
+                        "비워두셔도 살 수 있습니다. 다만 한 줄이라도 적어두면 팔지 말지 "
+                        "고민될 때 **'그때 왜 샀더라'** 를 다시 읽어볼 수 있습니다."
                     )
 
                 t1, t2 = st.columns(2)
@@ -427,13 +614,27 @@ with tab_trade:
                         add_trade(
                             conn, trade_date=date.today(), code=code, side="BUY",
                             qty=int(qty), price=float(buy_price), fee=float(fee), tax=0.0,
-                            reason=reason.strip(),
+                            reason=tag(
+                                None if buy_kind == "고르지 않음" else buy_kind,
+                                reason,
+                            ),
                             target_price=float(target) or None,
                             stop_price=float(stop) or None,
                         )
-                    st.success(
+                    # ★ 방금 스스로 한 약속을 다시 읽어줍니다 ★
+                    #   사고 나면 목표가·손절가를 정했다는 사실 자체를 잊습니다.
+                    #   글로 다시 보면 나중에 지킬 확률이 올라갑니다.
+                    약속 = []
+                    if target:
+                        약속.append(f"**{money(target)}**이 되면 팔고,")
+                    if stop:
+                        약속.append(f"**{money(stop)}**까지 내리면 손절하기로")
+                    맺음 = (" ".join(약속) + " 정했습니다.") if 약속 else \
+                        "팔 기준은 정하지 않았습니다. 다음에는 정해보세요."
+                    flash(
                         f"{name_of.get(code, code)} {int(qty):,}주를 "
-                        f"{money(buy_price)}에 샀다고 기록했습니다."
+                        f"{money(buy_price)}에 샀다고 기록했습니다.\n\n"
+                        f"약속 — {맺음}"
                     )
                     st.rerun()
 
@@ -471,13 +672,23 @@ with tab_trade:
                     bits.append(f"손절가 **{money(stp)}**")
                 if bits:
                     st.info("살 때 정한 기준 — " + " · ".join(bits))
-                if pd.notna(last_buy.get("reason")):
-                    with st.expander("살 때 적은 이유 다시 보기"):
-                        st.write(last_buy["reason"])
+                산종류, 산메모 = untag(last_buy.get("reason"))
+                if 산종류 or 산메모:
+                    # ★ 팔기 직전에 '그때 왜 샀는지' 를 다시 보여줍니다 ★
+                    #   파는 순간은 감정이 가장 앞서는 때입니다. 그때 처음의
+                    #   생각을 눈으로 다시 읽는 것만으로 판단이 달라집니다.
+                    with st.expander("💭 살 때 무슨 생각이었나요? (팔기 전에 한 번 보세요)",
+                                     expanded=True):
+                        if 산종류:
+                            st.markdown(f"**{산종류}** 라서 샀습니다.")
+                        if 산메모:
+                            st.write(산메모)
                         st.caption(
-                            "그때 생각한 이유가 아직 유효한가요? "
-                            "이유가 사라졌다면 파는 것이 맞고, 이유가 그대로인데 "
-                            "주가만 내렸다면 파는 것이 성급할 수 있습니다."
+                            "그때 생각한 이유가 **아직 그대로인가요?** "
+                            "이유가 사라졌다면 파는 것이 맞습니다. "
+                            "이유는 그대로인데 가격만 내렸다면, 파는 것이 아니라 "
+                            "오히려 더 살 자리일 수도 있습니다. "
+                            "가격이 아니라 이유를 보고 정하세요."
                         )
 
             v1, v2 = st.columns(2)
@@ -506,9 +717,24 @@ with tab_trade:
                 f"({(손익 / 들인돈 * 100) if 들인돈 else 0:+,.2f}%)"
             )
 
+            st.markdown("##### 왜 파시나요?")
+            st.caption(
+                "이 답으로 **정한 기준대로 팔았는지**를 따집니다. "
+                "'불안해서' 를 고르는 것이 부끄러운 일이 아닙니다. "
+                "그렇게 적어둬야 내가 어디서 흔들리는지 보입니다."
+            )
+            sell_kind = st.radio(
+                "파는 이유 종류",
+                [k for k, _ in SELL_REASONS] + ["고르지 않음"],
+                horizontal=True, key="sell_kind",
+            )
+            설명 = dict(SELL_REASONS).get(sell_kind)
+            if 설명:
+                st.caption(f"↳ {설명}")
+
             sell_reason = st.text_area(
-                "파는 이유", key="sell_reason",
-                placeholder="예: 목표가에 도달함 / 실적이 나빠져 처음 산 이유가 사라짐",
+                "덧붙일 말 (선택)", key="sell_reason",
+                placeholder="예: 실적이 꺾여 처음 산 이유가 사라짐",
             )
 
             if st.button("🔵 팔기", type="primary", width="stretch", key="do_sell"):
@@ -517,47 +743,123 @@ with tab_trade:
                         conn, trade_date=date.today(), code=code, side="SELL",
                         qty=int(sell_qty), price=float(sell_price),
                         fee=float(fee), tax=float(tax),
-                        reason=(sell_reason.strip() or None),
+                        reason=tag(
+                            None if sell_kind == "고르지 않음" else sell_kind,
+                            sell_reason,
+                        ),
                     )
-                st.success(
+                flash(
                     f"{name_of.get(code, code)} {int(sell_qty):,}주를 "
                     f"{money(sell_price)}에 팔았다고 기록했습니다. "
-                    f"실현손익 {signed(손익)}"
+                    f"실현손익 {signed(손익)}\n\n"
+                    "**🔍 복기** 탭에서 이 매매가 계획대로였는지 바로 볼 수 있습니다."
                 )
                 st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-#  📔 거래 내역
+#  🔍 복기 — 판 뒤에 '계획대로 했는지' 되돌아보는 곳
 # ══════════════════════════════════════════════════════════════
 with tab_log:
     if trades.empty:
-        st.info("아직 매매 기록이 없습니다.")
+        st.info("아직 매매 기록이 없습니다. 사고팔아 보면 여기서 되돌아볼 수 있습니다.")
     else:
-        _, closed = walk(trades)
-
-        st.subheader("팔아서 확정된 손익")
-        if not closed:
-            st.caption("아직 판 종목이 없습니다.")
-        else:
-            cl = pd.DataFrame(closed)
-            cl["종목명"] = cl["종목코드"].map(name_of).fillna(cl["종목코드"])
-            cl["판날"] = pd.to_datetime(cl["판날"]).dt.strftime("%Y-%m-%d")
-            st.dataframe(
-                cl[["판날", "종목명", "수량", "평균단가", "판가격",
-                    "실현손익", "실현수익률(%)", "이유"]].iloc[::-1],
-                width="stretch", hide_index=True,
-                column_config={
-                    c: st.column_config.NumberColumn(c, format="localized")
-                    for c in ["수량", "평균단가", "판가격", "실현손익", "실현수익률(%)"]
-                },
-            )
-
-        st.divider()
-        st.subheader("모든 매매 기록")
-        st.caption(
-            "살 때 적은 이유를 다시 읽어보세요. **판단이 맞았는지 틀렸는지보다, "
-            "어떤 이유로 살 때 잘 되었는지**를 보는 것이 훨씬 도움이 됩니다."
+        st.markdown(
+            "> **복기가 연습의 절반입니다.**\n"
+            "> 사고파는 것은 누구나 합니다. 끝난 뒤에 '내가 정한 대로 했는가' 를 "
+            "따져보는 사람만 다음번에 달라집니다."
         )
+
+        # ── ① 한 건씩 되짚기 ──
+        st.subheader("① 판 거래 하나씩 되짚기")
+        if rev.empty:
+            st.caption(
+                "아직 판 종목이 없습니다. 파는 순간이 사는 순간보다 훨씬 어렵고, "
+                "연습이 가장 많이 되는 곳입니다."
+            )
+        else:
+            잘한수 = int(rev["잘함"].sum())
+            st.caption(
+                f"판 {len(rev):,}번 중 **계획대로 한 것이 {잘한수:,}번** 입니다. "
+                "돈을 벌었는지가 아니라, 살 때 정한 기준대로 했는지로 봅니다."
+            )
+            for _, r in rev.iterrows():
+                날 = pd.Timestamp(r["판날"]).strftime("%Y-%m-%d") if pd.notna(r["판날"]) else ""
+                계획 = []
+                if pd.notna(r["목표가"]):
+                    계획.append(f"목표 {float(r['목표가']):,.0f}원")
+                if pd.notna(r["손절가"]):
+                    계획.append(f"손절 {float(r['손절가']):,.0f}원")
+                계획글 = " · ".join(계획) if 계획 else "정해둔 기준 없음"
+                수익 = r["실현수익률(%)"]
+                수익글 = f"{float(수익):+,.2f}%" if pd.notna(수익) else "—"
+                보유 = f" · {int(r['보유일']):,}일 들고 있었습니다" \
+                    if pd.notna(r["보유일"]) else ""
+                st.markdown(
+                    f"<div class='rv {'ok' if r['잘함'] else 'no'}'>"
+                    f"<span class='rv-head'>{'✅' if r['잘함'] else '⚠️'} "
+                    f"{r['종목명']} — {r['판정']}</span>"
+                    f"<div class='rv-sub'>{날} · 계획 {계획글} → "
+                    f"실제 {float(r['판가격']):,.0f}원에 팔았습니다 "
+                    f"({signed(r['실현손익'])}, {수익글}){보유}<br>"
+                    f"산 이유 <b>{r['산이유종류']}</b> → 판 이유 <b>{r['판이유종류']}</b>"
+                    f"</div></div>",
+                    unsafe_allow_html=True,
+                )
+                st.caption(r["말"])
+
+        # ── ② 이유 종류별 성적 ──
+        st.divider()
+        st.subheader("② 어떤 이유로 샀을 때 잘 됐나")
+        if rev.empty:
+            st.caption("판 거래가 쌓이면 여기에 나타납니다.")
+        else:
+            st.caption(
+                "**여기가 이 화면에서 가장 값진 부분입니다.** 대부분의 사람은 자기가 "
+                "무엇 때문에 잃는지 모릅니다. 종류별로 모아보면 보입니다. "
+                "다만 **3번 미만은 운일 가능성이 크니** 참고만 하세요."
+            )
+            for col, 제목 in [("산이유종류", "살 때 이유별"), ("판이유종류", "팔 때 이유별")]:
+                g = by_reason(rev, col)
+                if g.empty:
+                    continue
+                st.markdown(f"**{제목}**")
+                COLS = [col, "횟수", "이긴횟수", "승률(%)", "손익합계", "평균수익률(%)"]
+                st.dataframe(
+                    as_text(g, COLS), width="stretch", hide_index=True,
+                    column_config=text_columns(
+                        g, COLS,
+                        labels={col: 제목.replace("별", ""), "횟수": "판 횟수",
+                                "손익합계": "손익합계(원)"},
+                        helps={"승률(%)": "이 종류로 산 것 중 이익을 본 비율",
+                               "손익합계": "이 종류로 사고팔아 남은 돈의 합계"},
+                    ),
+                )
+
+            # 가장 성적이 나쁜 이유 하나를 짚어줍니다.
+            g = by_reason(rev, "산이유종류")
+            충분 = g[g["횟수"] >= 3]
+            if not 충분.empty:
+                worst = 충분.iloc[-1]
+                if float(worst["손익합계"]) < 0:
+                    st.warning(
+                        f"**'{worst['산이유종류']}'** 로 산 {int(worst['횟수']):,}번은 "
+                        f"합쳐서 {signed(worst['손익합계'])} 입니다. "
+                        "이 이유로 사는 것을 한동안 멈춰보는 것만으로 성적이 달라질 수 "
+                        "있습니다."
+                    )
+                best = 충분.iloc[0]
+                if float(best["손익합계"]) > 0 and best["산이유종류"] != worst["산이유종류"]:
+                    st.success(
+                        f"반대로 **'{best['산이유종류']}'** 로 산 "
+                        f"{int(best['횟수']):,}번은 합쳐서 "
+                        f"{signed(best['손익합계'])} 입니다. 나에게 맞는 방식일 수 "
+                        "있으니, 다음에도 이 기준으로 찾아보세요."
+                    )
+
+        # ── ③ 모든 기록 ──
+        st.divider()
+        st.subheader("③ 모든 매매 기록")
+        st.caption("적어둔 것을 그대로 보여줍니다. 잘못 적은 것은 아래에서 지울 수 있습니다.")
 
         log = trades.copy()
         log["종목명"] = log["code"].map(name_of).fillna(log["code"])
@@ -565,9 +867,14 @@ with tab_log:
         log["구분"] = log["side"].map({"BUY": "🔴 매수", "SELL": "🔵 매도"})
         log["금액"] = log["qty"] * log["price"]
 
+        # 이유는 '[종류] 메모' 로 한 칸에 저장돼 있습니다. 읽기 좋게 나눕니다.
+        log["이유종류"] = log["reason"].map(lambda t: untag(t)[0] or "")
+        log["메모"] = log["reason"].map(lambda t: untag(t)[1])
+
         st.dataframe(
             log[["날짜", "구분", "종목명", "qty", "price", "금액",
-                 "fee", "tax", "reason", "target_price", "stop_price"]].iloc[::-1],
+                 "fee", "tax", "이유종류", "메모",
+                 "target_price", "stop_price"]].iloc[::-1],
             width="stretch", hide_index=True,
             column_config={
                 "qty": st.column_config.NumberColumn("수량", format="localized"),
@@ -575,7 +882,8 @@ with tab_log:
                 "금액": st.column_config.NumberColumn("금액(원)", format="localized"),
                 "fee": st.column_config.NumberColumn("수수료", format="localized"),
                 "tax": st.column_config.NumberColumn("거래세", format="localized"),
-                "reason": st.column_config.TextColumn("이유", width="large"),
+                "이유종류": st.column_config.TextColumn("이유 종류", width="medium"),
+                "메모": st.column_config.TextColumn("덧붙인 말", width="large"),
                 "target_price": st.column_config.NumberColumn("목표가", format="localized"),
                 "stop_price": st.column_config.NumberColumn("손절가", format="localized"),
             },
@@ -596,7 +904,7 @@ with tab_log:
             if st.button("이 기록 지우기", key="do_del_trade"):
                 with get_conn() as conn:
                     delete_trade(conn, opts[target_label])
-                st.success("지웠습니다.")
+                flash("지웠습니다.")
                 st.rerun()
 
 # ══════════════════════════════════════════════════════════════
@@ -630,7 +938,7 @@ with tab_cash:
             add_cash(conn, cash_date=date.today(),
                      amount=(-amount if out else amount),
                      memo=(memo.strip() or None))
-        st.success(f"{money(amount)} {'출금' if out else '입금'}으로 기록했습니다.")
+        flash(f"{money(amount)} {'출금' if out else '입금'}으로 기록했습니다.")
         st.rerun()
 
     if not cash.empty:
@@ -659,7 +967,7 @@ with tab_cash:
             if st.button("이 기록 지우기", key="do_del_cash"):
                 with get_conn() as conn:
                     delete_cash(conn, opts[pick])
-                st.success("지웠습니다.")
+                flash("지웠습니다.")
                 st.rerun()
 
 st.divider()
@@ -667,5 +975,7 @@ st.caption(
     f"수수료 {DEFAULT_FEE_RATE}% (살 때·팔 때) · 증권거래세 {DEFAULT_TAX_RATE}% (팔 때만) 기준으로 "
     "계산합니다. 실제 증권사 요율과 세율은 다를 수 있고 해마다 바뀝니다.\n\n"
     "⚠️ 여기서 잘된다고 실제로도 잘된다는 뜻은 아닙니다. 진짜 돈이 걸리면 "
-    "판단이 달라지고, 원하는 가격에 사고팔지 못하는 경우도 많습니다."
+    "판단이 달라지고, 원하는 가격에 사고팔지 못하는 경우도 많습니다. "
+    "**연습의 목적은 돈을 버는 것이 아니라, 실제 돈을 넣기 전에 내 버릇을 "
+    "미리 알아두는 것입니다.**"
 )

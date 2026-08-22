@@ -182,7 +182,7 @@ def walk(trades: pd.DataFrame) -> tuple[dict[str, dict], list[dict]]:
         pos = held.setdefault(
             code,
             {"수량": 0, "취득원가": 0.0, "평균단가": 0.0,
-             "보유시작": None, "목표가": None, "손절가": None},
+             "보유시작": None, "목표가": None, "손절가": None, "산이유": None},
         )
 
         if t["side"] == "BUY":
@@ -197,6 +197,10 @@ def walk(trades: pd.DataFrame) -> tuple[dict[str, dict], list[dict]]:
                 pos["목표가"] = float(t["target_price"])
             if pd.notna(t.get("stop_price")):
                 pos["손절가"] = float(t["stop_price"])
+            # 살 때 적은 이유도 들고 있습니다. 팔 때 '그때 왜 샀는지' 를
+            # 나란히 보여주어야 복기가 됩니다.
+            if pd.notna(t.get("reason")) and str(t.get("reason")).strip():
+                pos["산이유"] = str(t["reason"]).strip()
             continue
 
         # ── 팔 때 ──
@@ -217,6 +221,16 @@ def walk(trades: pd.DataFrame) -> tuple[dict[str, dict], list[dict]]:
             "실현손익": 받은돈 - 들인돈,
             "실현수익률(%)": ((받은돈 / 들인돈 - 1) * 100) if 들인돈 else None,
             "이유": t.get("reason"),
+            # ── 아래는 '복기' 화면에서 쓰는 값입니다 ──
+            #   살 때 세운 계획을 함께 남겨두어야, 나중에 '계획대로 했는지'
+            #   를 따져볼 수 있습니다. 팔고 나면 계획은 지워지기 때문에
+            #   여기서 같이 적어둡니다.
+            "목표가": pos.get("목표가"),
+            "손절가": pos.get("손절가"),
+            "산이유": pos.get("산이유"),
+            "산날": pos.get("보유시작"),
+            "보유일": ((t["trade_date"] - pos["보유시작"]).days
+                       if pos.get("보유시작") is not None else None),
         })
 
         pos["수량"] -= sell_qty
@@ -226,6 +240,7 @@ def walk(trades: pd.DataFrame) -> tuple[dict[str, dict], list[dict]]:
             pos["보유시작"] = None
             pos["목표가"] = None
             pos["손절가"] = None
+            pos["산이유"] = None
 
     return held, closed
 
