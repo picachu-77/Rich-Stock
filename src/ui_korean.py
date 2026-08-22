@@ -128,6 +128,12 @@ _SCRIPT = """
 """
 
 
+# 영어 알파벳을 한국어로 읽었을 때 받침이 있는지
+#   L 엘 · M 엠 · N 엔 · R 아르  → 받침 있음
+#   나머지(A 에이, F 에프, S 에스, T 티, X 엑스 …) → 받침 없음
+_ALPHA_BATCHIM = {c: (c in "LMNR") for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+
+
 def josa(word: str, pair: str) -> str:
     """
     앞말에 맞는 조사를 붙여 돌려줍니다.
@@ -150,12 +156,16 @@ def josa(word: str, pair: str) -> str:
         return word + with_batchim
 
     last = word[-1]
-    # 한글 음절인지 확인합니다 (영어·숫자로 끝나면 판단할 수 없습니다).
     if "가" <= last <= "힣":
         has_batchim = (ord(last) - 0xAC00) % 28 != 0
     elif last.isdigit():
         # 숫자는 읽는 소리를 기준으로 합니다 (0·1·3·6·7·8 은 받침이 있습니다)
         has_batchim = last in "013678"
+    elif last.upper() in _ALPHA_BATCHIM:
+        # 영어 알파벳도 읽는 소리로 판단합니다.
+        #   L(엘)·M(엠)·N(엔)·R(아르) 만 받침이 있고 나머지는 없습니다.
+        #   그래서 'KODEX 는', 'ETF 는' 이 맞고 'ETF 은' 은 어색합니다.
+        has_batchim = _ALPHA_BATCHIM[last.upper()]
     else:
         # 알 수 없으면 받침이 있는 쪽으로 둡니다 (보통 더 자연스럽습니다).
         has_batchim = True

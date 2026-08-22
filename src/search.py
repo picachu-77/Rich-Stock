@@ -61,7 +61,7 @@ def _norm(text) -> str:
     return str(text).replace(" ", "").upper() if pd.notna(text) else ""
 
 
-def search(df: pd.DataFrame, query: str, limit: int = 8) -> pd.DataFrame:
+def search(df: pd.DataFrame, query: str, limit: int | None = 8) -> pd.DataFrame:
     """
     종목을 찾아 '그럴듯한 순서' 로 돌려줍니다.
 
@@ -75,6 +75,9 @@ def search(df: pd.DataFrame, query: str, limit: int = 8) -> pd.DataFrame:
 
     같은 점수끼리는 시가총액이 큰 회사를 먼저 보여줍니다.
     큰 회사일수록 찾는 사람이 많기 때문입니다.
+
+    limit 에 None 을 주면 맞는 것을 모두 돌려줍니다.
+    (목록 전체를 검색 결과로 좁힐 때 씁니다)
     """
     if df.empty:
         return df.head(0)
@@ -108,4 +111,6 @@ def search(df: pd.DataFrame, query: str, limit: int = 8) -> pd.DataFrame:
     hit["_크기"] = pd.to_numeric(hit.get("시가총액(억)"), errors="coerce").fillna(-1)
 
     hit = hit.sort_values(["_점수", "_크기"], ascending=[False, False])
-    return hit.head(limit).drop(columns=["_점수", "_크기"])
+    if limit is not None:
+        hit = hit.head(limit)
+    return hit.drop(columns=["_점수", "_크기"])

@@ -251,9 +251,9 @@ def main() -> None:
 
     expected = 7
     if len(tables) == expected:
-        print(f"\n완료! 표 {expected}개가 모두 준비되었습니다.")
+        print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
     else:
-        print(f"\n[!] 표가 {expected}개보다 적습니다. 오류 메시지를 확인해 주세요.")
+        print(f"\n[!] 표가 {expected:,}개보다 적습니다. 오류 메시지를 확인해 주세요.")
 
 
 if __name__ == "__main__":

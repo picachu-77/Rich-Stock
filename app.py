@@ -50,7 +50,7 @@ from src.valuation import (
     load_band_history,
     read_sentence,
 )
-from src.ui_korean import apply_korean_ui
+from src.ui_korean import apply_korean_ui, josa
 from src.ui_style import apply_style, mobile_sidebar_button
 
 # pandas 가 psycopg2 연결을 쓸 때 내는 안내 경고를 숨깁니다.
@@ -538,17 +538,44 @@ def _jump_to(code: str) -> None:
     st.session_state["_last_clicked"] = None
 
 
-if jump_query.strip():
-    hits = search(df, jump_query, limit=8)
+def _clear_jump() -> None:
+    """검색을 지워 목록을 원래대로 되돌립니다."""
+    st.session_state["q_jump"] = ""
 
-    if hits.empty:
+
+if jump_query.strip():
+    # ★ 찾은 종목만 목록에 남깁니다 ★
+    #   전에는 검색해도 아래 목록이 그대로여서, 결과 버튼과 목록이 따로 노는
+    #   느낌이었습니다. 검색하면 그 결과만 보이는 편이 자연스럽습니다.
+    all_hits = search(df, jump_query, limit=None)   # 목록을 좁히는 데 씁니다
+    hits = all_hits.head(8)                          # 바로가기 버튼용
+
+    if all_hits.empty:
         st.info(
             f"**'{jump_query}'** 로 찾은 종목이 없습니다.\n\n"
             "이름의 일부만 넣거나(예: 삼성), 6자리 종목코드를 넣어 보세요. "
             "초성으로도 찾을 수 있습니다 (예: ㅅㅅㅈㅈ)."
         )
     else:
-        st.caption(f"{len(hits)}개를 찾았습니다. 눌러서 바로 보세요.")
+        # 검색은 전체 종목에서 하므로 왼쪽 필터에 걸린 종목도 함께 나옵니다.
+        # 목록도 필터를 잠시 접어두고 '찾은 것 전부' 를 보여줍니다.
+        view = df[df["종목코드"].isin(all_hits["종목코드"])].copy()
+
+        c_msg, c_btn = st.columns([4, 1])
+        c_msg.success(
+            f"**'{jump_query}'** 로 **{len(all_hits):,}개**를 찾았습니다. "
+            "아래 목록에는 이 종목들만 보입니다."
+        )
+        c_btn.button(
+            "검색 지우기", on_click=_clear_jump, width="stretch", key="clear_jump",
+            help="검색을 지우면 원래 목록(왼쪽 필터 조건)으로 돌아갑니다.",
+        )
+
+        st.caption(
+            "눌러서 바로 보기"
+            + (f" — 찾은 {len(all_hits):,}개 중 가장 그럴듯한 8개입니다."
+               if len(all_hits) > 8 else "")
+        )
         cols = st.columns(min(len(hits), 4))
         for i, (_, hrow) in enumerate(hits.iterrows()):
             price = hrow.get("종가")
@@ -754,10 +781,16 @@ with tab_list:
             help="이름 일부를 입력하면 바로 찾을 수 있습니다.",
         )
         if outside and code == current:
+            # 목록에서 빠진 이유가 '검색' 인지 '필터' 인지 구분해 알려줍니다.
+            # 둘을 뭉뚱그리면 사용자가 엉뚱한 곳을 손보게 됩니다.
+            reason = ("지금 검색 결과에 없어"
+                      if jump_query.strip() else "지금 걸어둔 필터 조건에 맞지 않아")
+            # 종목명 끝 글자에 맞춰 조사를 고릅니다 (다라화학은 / 카카오는)
+            subject = josa(str(name_of.get(current, current)), "은/는")
             st.caption(
-                f"⚠️ **{name_of.get(current, current)}** 는 지금 걸어둔 필터 조건에 "
-                "맞지 않아 아래 목록에는 없습니다. 검색으로 고르셨기 때문에 "
-                "차트·재무 탭에서는 정상적으로 보입니다."
+                f"⚠️ **{subject}** {reason} 아래 목록에는 없습니다. "
+                "직접 고르셨기 때문에 📊 차트 · 📉 싼가 비싼가 · 🏦 재무 탭에서는 "
+                "정상적으로 보입니다."
             )
     st.session_state["sel_code"] = code
 
@@ -902,7 +935,7 @@ with tab_chart:
         # 데이터가 너무 적으면 왜 그런지 알려줍니다.
         if len(plot_df) < 5:
             st.warning(
-                f"이 기간에 저장된 거래일이 {len(plot_df)}일뿐이라 그래프가 거의 "
+                f"이 기간에 저장된 거래일이 {len(plot_df):,}일뿐이라 그래프가 거의 "
                 "비어 보입니다. 과거 데이터 수집이 아직 진행 중이기 때문입니다. "
                 "수집이 끝나면 정상적으로 그려집니다."
             )
