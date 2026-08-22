@@ -40,6 +40,15 @@ from src.market_data import (
     load_track_record,
 )
 from src.risk import FLAGS, add_flags, badges_html
+from src.disclosure import (
+    BY_KEY,
+    DART_VIEW,
+    OTHER,
+    direction_lines,
+    has_table as has_disclosure_table,
+    headline as direction_headline,
+    load_disclosures,
+)
 from src.search import search
 from src.ui_table import as_text, color_map, text_columns
 from src.valuation import (
@@ -596,9 +605,10 @@ st.divider()
 # 했습니다. 탭으로 나누면 한 번 눌러 바로 이동할 수 있습니다.
 #
 # 탭의 순서는 판단하는 순서와 같습니다.
-#   목록에서 고르고 → 주가 흐름을 보고 → 지금 싼지 보고 → 회사 상태를 봅니다.
-tab_list, tab_chart, tab_val, tab_fin = st.tabs(
-    ["📋 종목 목록", "📊 차트", "📉 싼가 비싼가", "🏦 재무"]
+#   목록에서 고르고 → 주가 흐름을 보고 → 지금 싼지 보고 → 회사 상태를 보고
+#   → 마지막으로 이 회사가 어디로 가는지 봅니다.
+tab_list, tab_chart, tab_val, tab_fin, tab_dir = st.tabs(
+    ["📋 종목 목록", "📊 차트", "📉 싼가 비싼가", "🏦 재무", "🧭 방향"]
 )
 
 with tab_list:
@@ -1202,4 +1212,118 @@ with tab_fin:
                     c: st.column_config.NumberColumn(format="localized")
                     for c in show_cols[1:]
                 },
+            )
+
+
+# ── 방향 탭 (DART 공시) ──────────────────────────────────────
+# 재무제표는 이미 지나간 일입니다. 회사가 앞으로 뭘 하려는지는 공시에
+# 먼저 나옵니다. 공시 제목을 갈래로 나눠 '지금 무엇을 하는 중인지' 보여줍니다.
+with tab_dir:
+    st.markdown(headline)
+
+    if not has_disclosure_table():
+        st.info(
+            "공시를 담을 표가 아직 없습니다.\n\n"
+            "명령창에서 아래를 한 번 실행하면 표가 만들어집니다.\n\n"
+            "`python -m src.create_tables`\n\n"
+            "그다음 공시를 받아옵니다 (처음에는 1년치를 받는 것을 권합니다).\n\n"
+            "`python -m src.disclosure_collect --days 365`"
+        )
+    else:
+        months = st.radio(
+            "얼마 동안의 공시를 볼까요",
+            [3, 6, 12, 24],
+            index=2,
+            horizontal=True,
+            format_func=lambda m: f"최근 {m:,}개월",
+            key="dir_months",
+        )
+
+        disc = load_disclosures(code, months=months)
+
+        if disc.empty:
+            st.info(
+                f"최근 {months:,}개월 동안 저장된 공시가 없습니다.\n\n"
+                "아직 공시를 받지 않았다면 명령창에서 아래를 실행해 주세요.\n\n"
+                "`python -m src.disclosure_collect --days 365`"
+            )
+        else:
+            # ── 한 줄 요약 ──
+            line = direction_headline(disc, months)
+            if line:
+                if line.startswith("⚠️"):
+                    st.warning(line)
+                else:
+                    st.success(line)
+
+            # ── 갈래별 정리 ──
+            lines = direction_lines(disc, months)
+            if lines:
+                st.markdown("#### 무슨 일을 했나요")
+                for l in lines:
+                    st.markdown(f"- {l}")
+            else:
+                st.caption(
+                    f"최근 {months:,}개월 동안 정기 보고서 말고는 눈에 띄는 공시가 없습니다."
+                )
+
+            # ── 갈래 설명 ──
+            with st.expander("각 갈래가 무슨 뜻인가요?"):
+                for key in ["투자", "수주", "조달", "주주환원", "지배구조", "위험"]:
+                    cat = BY_KEY[key]
+                    st.markdown(f"**{cat['아이콘']} {cat['이름']}** — {cat['뜻']}")
+
+            st.divider()
+
+            # ── 공시 목록 ──
+            st.markdown(f"#### 공시 목록 ({len(disc):,}건)")
+
+            pick = st.multiselect(
+                "갈래로 걸러보기 (비워두면 전체)",
+                [BY_KEY[k]["이름"] for k in
+                 ["위험", "투자", "수주", "조달", "주주환원", "지배구조", "정기보고", "기타"]
+                 if k in set(disc["category"])],
+                default=[],
+                key="dir_cats",
+            )
+            name_to_key = {v["이름"]: k for k, v in BY_KEY.items()}
+            shown = disc if not pick else disc[
+                disc["category"].isin([name_to_key[n] for n in pick])
+            ]
+
+            if shown.empty:
+                st.caption("고른 갈래에 해당하는 공시가 없습니다.")
+            else:
+                out = shown.copy()
+                out["날짜"] = out["rcept_dt"].dt.strftime("%Y-%m-%d")
+                out["갈래"] = [
+                    f"{BY_KEY.get(c, OTHER)['아이콘']} {BY_KEY.get(c, OTHER)['이름']}"
+                    for c in out["category"]
+                ]
+                out["제목"] = out["report_nm"]
+                out["원문"] = [DART_VIEW.format(rcept_no=r) for r in out["rcept_no"]]
+
+                st.dataframe(
+                    out[["날짜", "갈래", "제목", "원문"]],
+                    width="stretch",
+                    hide_index=True,
+                    height=430,
+                    column_config={
+                        "날짜": st.column_config.TextColumn("날짜", width="small"),
+                        "갈래": st.column_config.TextColumn("갈래", width="small"),
+                        "제목": st.column_config.TextColumn("제목", width="large"),
+                        "원문": st.column_config.LinkColumn(
+                            "DART 원문", display_text="열기", width="small",
+                            help="공시 원문이 새 창에서 열립니다. "
+                                 "제목만으로는 알 수 없는 내용이 여기 있습니다.",
+                        ),
+                    },
+                )
+
+            st.caption(
+                "⚠️ **제목만 보고 나눈 것입니다.** 같은 '유상증자' 라도 공장을 지으려는 "
+                "것이면 좋은 신호일 수 있고, 빚을 막으려는 것이면 나쁜 신호입니다. "
+                "어느 쪽인지는 **DART 원문을 읽어야** 알 수 있습니다.\n\n"
+                "그리고 공시에 안 나오는 일도 많습니다. 공시가 조용하다고 아무 일도 "
+                "없는 것은 아닙니다."
             )

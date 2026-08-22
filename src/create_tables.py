@@ -207,6 +207,28 @@ CREATE TABLE IF NOT EXISTS paper_cash (
 );
 
 CREATE INDEX IF NOT EXISTS idx_paper_cash_date ON paper_cash (cash_date DESC);
+
+-- ─────────────────────────────────────────────────────────────
+-- 9) 공시 목록 — '회사가 지금 무엇을 하고 있는지'
+-- ─────────────────────────────────────────────────────────────
+--    재무제표는 이미 지나간 일이지만, 회사가 앞으로 뭘 하려는지는
+--    공시에 먼저 나옵니다. (신규시설투자·타법인취득·공급계약·유상증자 등)
+--
+--    수집: python -m src.disclosure_collect
+CREATE TABLE IF NOT EXISTS disclosure (
+    rcept_no   TEXT PRIMARY KEY,     -- 접수번호 (공시 하나를 가리키는 고유번호)
+    code       TEXT NOT NULL,        -- 종목코드
+    corp_code  TEXT,                 -- DART 고유번호
+    rcept_dt   DATE NOT NULL,        -- 공시가 접수된 날
+    report_nm  TEXT NOT NULL,        -- 공시 제목
+    category   TEXT,                 -- 갈래 (투자/조달/수주/주주환원/지배구조/위험/정기보고/기타)
+    remark     TEXT,                 -- DART 비고
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_disc_code ON disclosure (code, rcept_dt DESC);
+CREATE INDEX IF NOT EXISTS idx_disc_date ON disclosure (rcept_dt DESC);
+CREATE INDEX IF NOT EXISTS idx_disc_cat  ON disclosure (category, rcept_dt DESC);
 """
 
 
@@ -230,7 +252,7 @@ def main() -> None:
                  WHERE t.table_schema = 'public'
                    AND t.table_name IN
                        ('ticker', 'daily_price', 'ingest_log', 'financial', 'dart_log',
-                        'paper_trade', 'paper_cash')
+                        'paper_trade', 'paper_cash', 'disclosure')
                  ORDER BY table_name;
                 """
             )
@@ -245,11 +267,12 @@ def main() -> None:
         "dart_log": "재무 수집기록",
         "paper_trade": "모의투자 매매",
         "paper_cash": "모의투자 예수금",
+        "disclosure": "공시 목록",
     }
     for name, col_count in tables:
         print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count:,}개)")
 
-    expected = 7
+    expected = 8
     if len(tables) == expected:
         print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
     else:
