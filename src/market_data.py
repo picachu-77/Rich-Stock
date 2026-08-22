@@ -165,8 +165,15 @@ def load_overview() -> pd.DataFrame:
     df.rename(columns={"code": "종목코드", "name": "종목명"}, inplace=True)
 
     # ── 투자지표 (거래소 제공) ──
-    df["PER"] = pd.to_numeric(df["per"], errors="coerce").round(2)
-    df["PBR"] = pd.to_numeric(df["pbr"], errors="coerce").round(2)
+    # ★ PER·PBR 이 0 이면 '값 없음' 입니다 ★
+    #   거래소는 ETF 처럼 지표가 없는 종목이나 적자 기업의 PER 을 0 으로
+    #   내려보냅니다. 0 을 그대로 두면 목록에서 'PER 낮은 순' 으로 줄 세울 때
+    #   맨 앞에 나와서, 가장 싼 종목처럼 보이는 착각을 일으킵니다.
+    #   주식의 PER·PBR 이 정확히 0 인 경우는 없으므로 빈칸으로 바꿉니다.
+    per = pd.to_numeric(df["per"], errors="coerce").round(2)
+    pbr = pd.to_numeric(df["pbr"], errors="coerce").round(2)
+    df["PER"] = per.where(per > 0)
+    df["PBR"] = pbr.where(pbr > 0)
     df["EPS(원)"] = pd.to_numeric(df["eps"], errors="coerce")
     df["BPS(원)"] = pd.to_numeric(df["bps"], errors="coerce")
     df["배당수익률(%)"] = pd.to_numeric(df["div_yield"], errors="coerce").round(2)

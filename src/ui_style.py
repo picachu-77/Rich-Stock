@@ -33,6 +33,20 @@ _CSS = """
   #MainMenu                      { visibility: hidden; height: 0; }
   footer                         { visibility: hidden; height: 0; }
   .stDeployButton                { display: none; }
+  /* Streamlit 이 화면 맨 위에 두는 빈 머리띠. 안에 든 버튼을 모두 감췄으므로
+     자리만 차지합니다. 높이를 줄여 그만큼 본문을 위로 끌어올립니다. */
+  [data-testid="stHeader"] {
+    height: 2.6rem !important; min-height: 2.6rem !important;
+    background: transparent;
+  }
+
+  /* ── 1-2. 눈에 안 보이는 칸이 차지하는 자리 없애기 ─────────── */
+  /* 스타일·스크립트를 넣기 위한 칸들은 화면에 아무것도 그리지 않지만,
+     Streamlit 이 칸마다 16px 간격을 넣어서 화면 위쪽이 80px 가량 빕니다.
+     아예 자리를 없애 그만큼 본문을 끌어올립니다.
+     ※ 이 앱은 눈에 보이는 components.html 을 쓰지 않으므로 안전합니다. */
+  [data-testid="stElementContainer"]:has(> iframe.stIFrame) { display: none !important; }
+  [data-testid="stElementContainer"]:has(style)             { display: none !important; }
 
   /* ── 2. 기본 색과 글자 ─────────────────────────────────────── */
   :root {
@@ -65,14 +79,15 @@ _CSS = """
     line-height: 1.6 !important;
   }
 
-  .block-container { padding-top: 2.2rem; padding-bottom: 3rem; }
+  /* 첫 화면에서 정작 봐야 할 표·카드가 아래로 밀리지 않도록 위 여백을 줄입니다 */
+  .block-container { padding-top: 1.1rem; padding-bottom: 3rem; max-width: 1500px; }
 
   /* ── 3. 숫자 요약 카드 (metric) ─────────────────────────────── */
   [data-testid="stMetric"] {
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: .85rem 1rem;
+    padding: .7rem .85rem;
     box-shadow: 0 1px 2px rgba(15,23,42,.04);
   }
   [data-testid="stMetricLabel"] p {
@@ -106,6 +121,8 @@ _CSS = """
 
   /* ── 6. 표 ─────────────────────────────────────────────────── */
   [data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  /* 표 안 글자를 조금 키웁니다. 숫자가 많은 화면이라 작으면 읽기 힘듭니다 */
+  [data-testid="stDataFrame"] [data-testid="stTable"] { font-size: .93rem; }
 
   /* ── 7. 버튼·입력칸 ────────────────────────────────────────── */
   .stButton button, .stDownloadButton button { min-height: 42px; border-radius: 9px; font-weight: 600; }
@@ -115,13 +132,28 @@ _CSS = """
   [data-testid="stRadio"] [role="radiogroup"] { gap: .35rem; flex-wrap: wrap; }
   [data-testid="stRadio"] label {
     border: 1px solid var(--line); background: var(--card); border-radius: 999px;
-    padding: .3rem .8rem; margin: 0 !important;
+    padding: .35rem .85rem; margin: 0 !important;
+    transition: background .12s, border-color .12s;
+  }
+  [data-testid="stRadio"] label:hover { border-color: #94a3b8; background: var(--card-soft); }
+
+  /* ★ 고른 알약을 파랗게 채워 한눈에 보이게 합니다 ★
+     기본 상태로는 작은 동그라미 하나만 달라져서, 무엇을 골랐는지 알아보기 어렵습니다. */
+  [data-testid="stRadio"] label:has(input:checked) {
+    background: #eff6ff; border-color: var(--brand);
+  }
+  [data-testid="stRadio"] label:has(input:checked) p {
+    color: #1d4ed8 !important; font-weight: 700 !important;
   }
 
   /* 탭(목록 / 차트 / 재무)을 크고 또렷하게 */
   [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: .25rem; border-bottom: 2px solid var(--line); }
   [data-testid="stTabs"] [data-baseweb="tab"] {
     font-weight: 700; font-size: 1rem; padding: .6rem 1rem;
+  }
+  /* 지금 보고 있는 탭을 진하게 (기본값은 밑줄만 있어 눈에 잘 안 띕니다) */
+  [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {
+    color: var(--brand) !important;
   }
 
   /* ── 8. 휴대폰용 종목 카드 (표 대신 보여주는 목록) ──────────── */
@@ -239,18 +271,40 @@ _CSS = """
   table.cmp td.best { background: #f0fdf4; font-weight: 800; color: #027a48; }
   table.cmp td.best::after { content: " ★"; font-size: .7rem; color: #12b76a; }
 
+  /* ── 8-6. 키보드로 옮겨 다닐 때 지금 위치 표시 ──────────────── */
+  /* 마우스 없이 Tab 키로 조작하는 분을 위해, 지금 선택된 곳을 또렷하게 */
+  .stButton button:focus-visible,
+  [data-baseweb="input"] input:focus-visible,
+  [data-testid="stRadio"] label:has(input:focus-visible),
+  [data-testid="stTabs"] [data-baseweb="tab"]:focus-visible {
+    outline: 3px solid #93c5fd !important;
+    outline-offset: 2px !important;
+  }
+
+  /* 움직임을 줄이도록 설정한 기기에서는 전환 효과를 끕니다 */
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
   /* ── 9. 기기별로 하나만 보여주기 ───────────────────────────── */
-  .st-key-only_mobile { display: none; }          /* 기본(컴퓨터): 휴대폰용 감춤 */
+  /* 이름이 only_mobile / only_desktop 으로 시작하면 모두 적용됩니다.
+     한 화면에서 여러 곳에 쓰려면 이름 뒤에 구분을 붙이세요. (예: only_desktop_cols) */
+  [class*="st-key-only_mobile"] { display: none; }   /* 기본(컴퓨터): 휴대폰용 감춤 */
 
   /* ── 10. 휴대폰(가로 640px 이하)에서만 적용되는 규칙 ────────── */
   @media (max-width: 640px) {
-    .st-key-only_mobile  { display: block; }      /* 휴대폰: 카드 목록 보이기 */
-    .st-key-only_desktop { display: none; }       /* 휴대폰: 넓은 표 감추기 */
+    [class*="st-key-only_mobile"]  { display: block; }   /* 휴대폰: 카드 목록 보이기 */
+    [class*="st-key-only_desktop"] { display: none; }    /* 휴대폰: 컴퓨터 전용 감추기 */
 
-    .block-container { padding: 1rem .8rem 5rem .8rem; }
+    /* 아래 여백은 떠 있는 필터 버튼에 가리지 않을 만큼만 둡니다 */
+    .block-container { padding: .6rem .8rem 4.5rem .8rem; }
 
-    h1 { font-size: 1.45rem !important; }
-    h2 { font-size: 1.15rem !important; }
+    h1 { font-size: 1.4rem !important; }
+    h2 { font-size: 1.12rem !important; }
+
+    /* 본문 글자를 살짝 키워 읽기 편하게 (숫자가 많은 화면입니다) */
+    [data-testid="stAppViewContainer"] p,
+    [data-testid="stAppViewContainer"] li { font-size: 1.02rem; line-height: 1.65; }
 
     /* 가로로 늘어선 칸을 2개씩 줄바꿈 (마지막 칸이 혼자 넓어지지 않도록 고정) */
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .5rem !important; }
@@ -266,8 +320,14 @@ _CSS = """
     [data-testid="stMetricLabel"] p { font-size: .78rem !important; }
 
     /* 탭을 손가락으로 누르기 쉽게, 좁으면 가로 스크롤 */
-    [data-testid="stTabs"] [data-baseweb="tab-list"] { overflow-x: auto; }
-    [data-testid="stTabs"] [data-baseweb="tab"] { padding: .55rem .7rem; font-size: .95rem; }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+      overflow-x: auto; scrollbar-width: none;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+    /* 탭 4개가 한 줄에 들어가도록 좌우 여백을 줄입니다 */
+    [data-testid="stTabs"] [data-baseweb="tab"] {
+      padding: .5rem .45rem; font-size: .88rem; white-space: nowrap;
+    }
 
     /* 접이식 카드 제목이 3줄씩 길어지지 않게 2줄로 제한 */
     [data-testid="stAppViewContainer"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p {
@@ -275,6 +335,15 @@ _CSS = """
       -webkit-line-clamp: 2; -webkit-box-orient: vertical;
       overflow: hidden; font-size: .95rem; line-height: 1.45;
     }
+
+    /* 알약 버튼(높은 순/낮은 순 등)이 든 칸은 한 줄을 다 쓰게 합니다.
+       반 칸만 주면 알약 두 개가 안 들어가 줄이 넘어갑니다. */
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has([data-testid="stRadioGroup"][data-orientation="horizontal"]) {
+      flex: 0 1 100% !important; min-width: 100% !important; width: 100% !important;
+    }
+
+    /* 휴대폰에서는 머리띠를 더 줄입니다 */
+    [data-testid="stHeader"] { height: 2.2rem !important; min-height: 2.2rem !important; }
 
     /* 밸류에이션 막대: 눈금 5개는 휴대폰에서 겹치므로 가운데 3개만 남깁니다 */
     .vb-q { display: none; }
@@ -309,12 +378,13 @@ _SIDEBAR_BTN = """
   const btn = doc.createElement('button');
   btn.textContent = '☰ 필터';          /* ☰ 필터 */
   btn.setAttribute('type', 'button');
+  /* 화면 한가운데에 두면 본문 글자를 가립니다. 오른쪽 아래 구석으로 보냅니다. */
   btn.style.cssText = [
-    'position:fixed', 'left:50%', 'transform:translateX(-50%)', 'bottom:14px',
-    'z-index:9990', 'padding:.7rem 1.4rem', 'border-radius:999px',
+    'position:fixed', 'right:14px', 'bottom:16px',
+    'z-index:9990', 'padding:.6rem 1.1rem', 'border-radius:999px',
     'border:0', 'background:#2563eb', 'color:#fff', 'font-weight:700',
-    'font-size:15px', 'box-shadow:0 4px 14px rgba(37,99,235,.4)', 'cursor:pointer',
-    'display:none',
+    'font-size:14px', 'box-shadow:0 4px 14px rgba(37,99,235,.4)', 'cursor:pointer',
+    'display:none', 'opacity:.94',
   ].join(';');
 
   btn.addEventListener('click', function () {

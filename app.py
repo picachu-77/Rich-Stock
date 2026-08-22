@@ -232,7 +232,8 @@ def calc_period_returns(hist: pd.DataFrame) -> dict[str, float | None]:
 st.title("📈 국내주식 대시보드")
 
 # 첫 화면이 설명글로 꽉 차지 않도록, 자세한 사용법은 접어둡니다.
-with st.expander("ⓘ 사용법 (처음이신가요?)", expanded=False):
+# (한 번 읽으면 되는 내용이라 접힌 상태가 기본입니다)
+with st.expander("ⓘ 사용법 — 처음이신가요?", expanded=False):
     st.markdown(
         "1. **필터**로 원하는 조건을 겁니다. "
         "컴퓨터는 화면 왼쪽, 휴대폰은 화면 아래 **`☰ 필터`** 버튼을 누르세요.\n"
@@ -263,9 +264,12 @@ if not meta["price_rows"]:
     )
     st.stop()
 
-c1, c2 = st.columns(2)
-c1.metric("등록 종목", f"{meta['ticker_active']:,}개")
-c2.metric("최신 기준일", str(meta["last_date"]))
+# 등록 종목 수와 기준일은 매번 확인할 값이 아닙니다.
+# 큰 카드 두 개로 두면 정작 봐야 할 종목 목록이 화면 아래로 밀려납니다.
+st.caption(
+    f"등록 종목 **{meta['ticker_active']:,}개**　·　"
+    f"최신 기준일 **{meta['last_date']}**"
+)
 
 df = load_overview()
 if df.empty:
@@ -327,11 +331,7 @@ with st.sidebar:
              "**🔎 종목 바로 찾기** 를 쓰시는 편이 빠릅니다.",
     )
 
-    st.caption(
-        "종목 하나만 찾으시려면 화면 위쪽 **🔎 종목 바로 찾기** 를 쓰세요. "
-        "여기 조건들은 **목록 전체를 좁힐 때** 씁니다. "
-        "정렬은 **📋 종목 목록** 위쪽에 있습니다."
-    )
+    st.caption("종목 하나만 찾으실 땐 화면 위쪽 **🔎 종목 바로 찾기** 가 빠릅니다.")
 
     # ── 접이식 카드 ①: 종류 · 시장 ──
     with st.expander("🏷️ 종류 · 시장", expanded=False):
@@ -487,13 +487,27 @@ if debt_max > 0:
 if only_with_fin:
     view = view[view["ROE(%)"].notna() | view["부채비율(%)"].notna()]
 
-display_cols = (
-    ["종목코드", "종목명", "시장", "종류", "종가", "등락률(%)", "고점대비(%)",
-     "거래량", "시가총액(억)"]
-    + ["PER", "PBR", "배당수익률(%)"]
-    + ["ROE(%)", "부채비율(%)", "영업이익률(%)"]
-    + RETURN_COLS
-)
+# ── 표에 보여줄 열 묶음 ────────────────────────────────────────
+# 열 19개를 한 번에 늘어놓으면 화면 밖으로 잘려서, 정작 보려던 숫자가
+# 안 보입니다. 목적별로 묶어 두고 필요한 묶음만 보여줍니다.
+BASE_COLS = ["종목코드", "종목명", "종가", "등락률(%)"]
+
+COLUMN_SETS: dict[str, list[str]] = {
+    "기본": BASE_COLS + ["시가총액(억)", "PER", "PBR", "ROE(%)", "배당수익률(%)"],
+    "수익률": BASE_COLS + RETURN_COLS + ["52주위치(%)", "고점대비(%)"],
+    "재무": BASE_COLS + ["PER", "PBR", "ROE(%)", "부채비율(%)",
+                        "영업이익률(%)", "배당수익률(%)"],
+    "전체": (
+        ["종목코드", "종목명", "시장", "종류", "종가", "등락률(%)", "고점대비(%)",
+         "거래량", "시가총액(억)"]
+        + ["PER", "PBR", "배당수익률(%)"]
+        + ["ROE(%)", "부채비율(%)", "영업이익률(%)"]
+        + RETURN_COLS
+    ),
+}
+
+# 정렬·카드에는 모든 열이 필요하므로 전체 목록도 따로 둡니다.
+display_cols = COLUMN_SETS["전체"]
 
 if view.empty:
     st.warning("조건에 맞는 종목이 없습니다. 왼쪽 필터를 조금 넓혀 보세요.")
@@ -511,7 +525,7 @@ st.markdown("#### 🔎 종목 바로 찾기")
 jump_query = st.text_input(
     "종목 바로 찾기",
     key="q_jump",
-    placeholder="이름 · 종목코드 · 초성으로 찾기   (예: 삼성전자, 005930, ㅅㅅㅈㅈ)",
+    placeholder="삼성전자 · 005930 · ㅅㅅㅈㅈ",
     label_visibility="collapsed",
 )
 
@@ -582,16 +596,19 @@ with tab_list:
     # 이 지표들은 '낮을수록 좋다'고 보는 것이 일반적이라 기본을 낮은 순으로 둡니다.
     LOWER_IS_BETTER = {"PER", "PBR", "부채비율(%)"}
 
-    s1, s2 = st.columns([3, 2])
+    # 정렬 기준 · 순서 · 열 묶음을 한 줄에 둡니다.
+    # 세 줄로 늘어놓으면 그만큼 표가 화면 아래로 밀려납니다.
+    s1, s2, s3 = st.columns([4, 3, 5])
+
     sort_name = s1.selectbox(
-        "↕️ 정렬 기준", list(SORT_COLUMNS.keys()), index=0, key="f_sortcol",
+        "↕️ 무엇을 기준으로", list(SORT_COLUMNS.keys()), index=0, key="f_sortcol",
         help="이 항목을 기준으로 목록을 줄 세웁니다.",
     )
     sort_col = SORT_COLUMNS[sort_name]
 
     default_dir = 1 if sort_col in LOWER_IS_BETTER else 0
     direction = s2.radio(
-        "순서",
+        "어느 쪽부터",
         ["높은 순 ↓", "낮은 순 ↑"],
         index=default_dir,
         horizontal=True,
@@ -601,9 +618,27 @@ with tab_list:
     )
     ascending = direction.startswith("낮은")
 
+    # 어떤 열을 볼지 고릅니다. (열을 다 펼치면 화면 밖으로 잘립니다)
+    #
+    # 휴대폰에서는 표 대신 카드로 보여주므로 이 칸이 쓸모없습니다.
+    # 그런데도 놔두면 알약 4개가 세로로 쌓여 화면을 세 줄이나 먹습니다.
+    # 그래서 컴퓨터에서만 보이게 감춥니다. (값은 그대로 계산됩니다)
+    with s3.container(key="only_desktop_cols"):
+        col_set = st.radio(
+            "숫자 묶음",
+            list(COLUMN_SETS.keys()),
+            index=0,
+            horizontal=True,
+            key="f_colset",
+            help="열을 한 번에 다 보여주면 화면 밖으로 잘려 읽기 어렵습니다. "
+                 "보시려는 묶음만 고르세요. '전체' 는 옆으로 밀어서 봅니다.",
+        )
+
     # 값이 없는 종목(빈칸)은 항상 맨 뒤로 보냅니다.
     view = view.sort_values(sort_col, ascending=ascending, na_position="last")
     table = view[display_cols].reset_index(drop=True)
+    # 화면에 그릴 열 (없는 열은 건너뜁니다)
+    shown_cols = [c for c in COLUMN_SETS[col_set] if c in table.columns]
 
     st.caption(
         f"**{sort_name}** {'낮은' if ascending else '높은'} 순으로 정렬했습니다. "
@@ -628,17 +663,20 @@ with tab_list:
 
     # ── 컴퓨터: 지금까지의 표 그대로 ──
     with st.container(key="only_desktop"):
-        st.caption(
-            "표 왼쪽 끝의 네모(☐)를 누르거나, 표 아래의 **종목 선택**에서 고르면 "
-            "차트와 재무 탭에 그 종목이 나타납니다. "
-            "열 제목을 누르면 그 열 기준으로 정렬됩니다."
-        )
         event = st.dataframe(
             # 오른 값은 빨강, 내린 값은 파랑으로 칠해 한눈에 보이게 합니다.
-            table.style.map(color_updown, subset=["등락률(%)"] + RETURN_COLS),
+            #
+            # ※ 값이 없는 칸에 Streamlit 이 'None' 이라고 적습니다. 이걸 없애려면
+            #   숫자를 글자로 바꿔야 하는데, 그러면 열 제목을 눌렀을 때 14.85 가
+            #   9.5 보다 앞에 오는 식으로 정렬이 틀어집니다. 투자 판단에 쓰는
+            #   표에서는 그쪽이 더 위험하므로 숫자 열을 그대로 둡니다.
+            table[shown_cols].style.map(
+                color_updown,
+                subset=[c for c in ["등락률(%)"] + RETURN_COLS if c in shown_cols],
+            ),
             width="stretch",
             hide_index=True,
-            height=400,
+            height=520,   # 한 화면에 더 많은 종목이 보이도록
             on_select="rerun",
             selection_mode="single-row",
             column_config={
@@ -692,6 +730,15 @@ with tab_list:
             },
         )
 
+        # 사용법은 표 '아래' 에 둡니다. 위에 두면 그만큼 표가 밀려 내려갑니다.
+        with st.expander("표 사용법", expanded=False):
+            st.markdown(
+                "- 표 왼쪽 끝의 네모(☐)를 누르면 그 종목이 **📊 차트 · 🏦 재무** 탭에 나타납니다\n"
+                "- 표 위의 **종목 선택** 칸에서 골라도 됩니다\n"
+                "- 열 제목을 누르면 그 열 기준으로 정렬됩니다\n"
+                "- 열이 부족하면 위의 **어떤 숫자를 볼까요** 에서 다른 묶음을 고르세요"
+            )
+
     # ── 어떤 종목을 볼지 정하기 ───────────────────────────────
     # 방법 두 가지를 모두 지원합니다.
     #   (1) 표에서 줄을 클릭(컴퓨터)   (2) 아래 '종목 선택' 목록에서 고르기
@@ -723,7 +770,7 @@ with tab_list:
     # 위에서 자리를 잡아둔 곳(sel_slot)에 선택 칸을 채워 넣습니다.
     with sel_slot:
         code = st.selectbox(
-            "🔎 종목 선택 — 고른 종목이 📊 차트 · 🏦 재무 탭에 나타납니다",
+            "🔎 자세히 볼 종목",
             codes,
             index=default_idx,
             format_func=lambda c: f"{name_of.get(c, c)}  ({c})",
