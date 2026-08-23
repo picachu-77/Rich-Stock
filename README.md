@@ -78,11 +78,22 @@ py -m venv .venv
 
 ## 2. 데이터 채우기
 
-### 2-1. 표(테이블) 만들기 — 1회
+### 2-1. 표(테이블) 만들기
 
 ```powershell
 .venv\Scripts\python.exe -m src.create_tables
 ```
+
+> **보통은 손으로 하지 않아도 됩니다.**
+> `src/create_tables.py` 가 바뀐 채로 깃허브 `main` 에 올라가면
+> `.github/workflows/setup.yml` 이 저절로 돌아서 없는 표를 만들어 둡니다.
+> 위 명령은 내 컴퓨터에서 시험해 볼 때만 쓰면 됩니다.
+>
+> 급할 땐 깃허브 > **Actions** > **표 만들기 (자동)** > **Run workflow** 로
+> 아무 때나 직접 돌릴 수도 있습니다.
+>
+> 여러 번 돌려도 안전합니다. 모두 `CREATE TABLE IF NOT EXISTS` 라서
+> 이미 있는 표와 그 안의 자료는 건드리지 않습니다.
 
 ### 2-2. 과거 3년치 채우기 — 1회 (오래 걸림)
 
@@ -212,6 +223,7 @@ py -m venv .venv
 | `src/disclosure_collect.py` | 공시 모으기 |
 | `src/paper.py` | 모의투자 계산 (평균단가 · 손익 · 알림) |
 | `src/practice.py` | 모의투자를 '연습' 으로 만들기 (단계 · 복기 · 습관 점수) |
+| `.github/workflows/setup.yml` | 표가 바뀌면 자동으로 만들기 |
 | `.github/workflows/daily.yml` | 매일 시세 자동 실행 |
 | `.github/workflows/quarterly.yml` | 분기별 재무 자동 실행 |
 
