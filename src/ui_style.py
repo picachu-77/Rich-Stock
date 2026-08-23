@@ -423,6 +423,16 @@ def apply_style() -> None:
 # 휴대폰에서 화면 아래에 떠 있는 '필터' 버튼.
 # 원래 필터를 열려면 화면 왼쪽 위의 작은 '≫' 를 눌러야 하는데 찾기 어렵습니다.
 # 이 버튼을 누르면 그 '≫' 를 대신 눌러줍니다.
+#
+# ★ 왜 '왼쪽' 아래인가요? ★
+#   카카오톡·네이버 같은 앱 안에서 링크를 열면, 그 앱이 화면 오른쪽 아래에
+#   자기 버튼(공유·목록 등)을 띄웁니다. 그 자리에 두면 우리 버튼이 가려져
+#   보이지도 눌리지도 않습니다. 왼쪽 아래는 대개 비어 있어서 그쪽에 둡니다.
+#
+#   아래 여백을 넉넉히 두는 이유
+#     아이폰은 화면 맨 아래에 홈 막대가 있고, 브라우저도 아래에 주소·이동
+#     막대를 둡니다. env(safe-area-inset-bottom) 은 그 높이를 기기가
+#     알려주는 값입니다. 그만큼 위로 띄워야 버튼이 걸치지 않습니다.
 _SIDEBAR_BTN = """
 <script>
 (function () {
@@ -433,20 +443,29 @@ _SIDEBAR_BTN = """
   const btn = doc.createElement('button');
   btn.textContent = '☰ 필터';          /* ☰ 필터 */
   btn.setAttribute('type', 'button');
-  /* 화면 한가운데에 두면 본문 글자를 가립니다. 오른쪽 아래 구석으로 보냅니다. */
+  /* 화면 한가운데에 두면 본문 글자를 가립니다. 왼쪽 아래 구석으로 보냅니다.
+     (오른쪽 아래는 카카오톡·네이버 앱의 버튼이 차지하는 자리입니다)      */
   btn.style.cssText = [
-    'position:fixed', 'right:14px', 'bottom:16px',
-    'z-index:9990', 'padding:.6rem 1.1rem', 'border-radius:999px',
+    'position:fixed', 'left:12px',
+    'bottom:calc(18px + env(safe-area-inset-bottom, 0px))',
+    'z-index:2147483000', 'padding:.62rem 1.1rem', 'border-radius:999px',
     'border:0', 'background:#2563eb', 'color:#fff', 'font-weight:700',
-    'font-size:14px', 'box-shadow:0 4px 14px rgba(37,99,235,.4)', 'cursor:pointer',
-    'display:none', 'opacity:.94',
+    'font-size:14px', 'box-shadow:0 4px 14px rgba(15,23,42,.35)', 'cursor:pointer',
+    'display:none', 'opacity:1',
   ].join(';');
 
   btn.addEventListener('click', function () {
     // 접혀 있는 사이드바를 여는 진짜 버튼을 찾아 대신 눌러줍니다.
-    const opener = doc.querySelector('[data-testid="stSidebarCollapsedControl"] button')
-                || doc.querySelector('[data-testid="stSidebarCollapseButton"] button')
-                || doc.querySelector('[data-testid="collapsedControl"] button');
+    // 사이드바를 여는 진짜 버튼의 이름표는 Streamlit 판올림마다 바뀝니다.
+    // 그래서 그동안 쓰였던 이름을 차례로 찾아봅니다. 하나라도 있으면 됩니다.
+    const 이름표 = ['stExpandSidebarButton', 'stSidebarCollapsedControl',
+                    'stSidebarCollapseButton', 'collapsedControl'];
+    let opener = null;
+    for (const t of 이름표) {
+      opener = doc.querySelector('[data-testid="' + t + '"] button')
+            || doc.querySelector('[data-testid="' + t + '"]');
+      if (opener) break;
+    }
     if (opener) opener.click();
   });
 
