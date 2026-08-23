@@ -420,19 +420,21 @@ def apply_style() -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
-# 휴대폰에서 화면 아래에 떠 있는 '필터' 버튼.
+# 휴대폰에서 화면 오른쪽 위에 떠 있는 '필터' 버튼.
 # 원래 필터를 열려면 화면 왼쪽 위의 작은 '≫' 를 눌러야 하는데 찾기 어렵습니다.
 # 이 버튼을 누르면 그 '≫' 를 대신 눌러줍니다.
 #
-# ★ 왜 '왼쪽' 아래인가요? ★
-#   카카오톡·네이버 같은 앱 안에서 링크를 열면, 그 앱이 화면 오른쪽 아래에
-#   자기 버튼(공유·목록 등)을 띄웁니다. 그 자리에 두면 우리 버튼이 가려져
-#   보이지도 눌리지도 않습니다. 왼쪽 아래는 대개 비어 있어서 그쪽에 둡니다.
+# ★ 왜 '오른쪽 위' 인가요? ★
+#   카카오톡·네이버 같은 앱 안에서 링크를 열면, 그 앱이 화면 아래쪽에
+#   자기 버튼(공유·목록 등)과 주소 막대를 띄웁니다. 아래 구석에 두면
+#   우리 버튼이 가려져 보이지도 눌리지도 않습니다. 화면 위쪽은 그런 것이
+#   없어서 무엇에도 가리지 않습니다.
 #
-#   아래 여백을 넉넉히 두는 이유
-#     아이폰은 화면 맨 아래에 홈 막대가 있고, 브라우저도 아래에 주소·이동
-#     막대를 둡니다. env(safe-area-inset-bottom) 은 그 높이를 기기가
-#     알려주는 값입니다. 그만큼 위로 띄워야 버튼이 걸치지 않습니다.
+#   위 여백을 조금 두는 이유
+#     아이폰은 화면 맨 위에 시계·노치가 걸치는 영역이 있습니다.
+#     env(safe-area-inset-top) 은 그 높이를 기기가 알려주는 값입니다.
+#     그만큼 아래로 내려야 버튼이 가려지지 않습니다.
+#     (그런 영역이 없는 기기에서는 0 이 되어 아무 일도 없습니다)
 _SIDEBAR_BTN = """
 <script>
 (function () {
@@ -443,14 +445,14 @@ _SIDEBAR_BTN = """
   const btn = doc.createElement('button');
   btn.textContent = '☰ 필터';          /* ☰ 필터 */
   btn.setAttribute('type', 'button');
-  /* 화면 한가운데에 두면 본문 글자를 가립니다. 왼쪽 아래 구석으로 보냅니다.
-     (오른쪽 아래는 카카오톡·네이버 앱의 버튼이 차지하는 자리입니다)      */
+  /* 화면 한가운데에 두면 본문 글자를 가립니다. 오른쪽 위 구석으로 보냅니다.
+     (아래 구석은 카카오톡·네이버 앱의 버튼이 차지하는 자리입니다)        */
   btn.style.cssText = [
-    'position:fixed', 'left:12px',
-    'bottom:calc(18px + env(safe-area-inset-bottom, 0px))',
-    'z-index:2147483000', 'padding:.62rem 1.1rem', 'border-radius:999px',
+    'position:fixed', 'right:12px',
+    'top:calc(6px + env(safe-area-inset-top, 0px))',
+    'z-index:2147483000', 'padding:.5rem .95rem', 'border-radius:999px',
     'border:0', 'background:#2563eb', 'color:#fff', 'font-weight:700',
-    'font-size:14px', 'box-shadow:0 4px 14px rgba(15,23,42,.35)', 'cursor:pointer',
+    'font-size:13.5px', 'box-shadow:0 4px 14px rgba(15,23,42,.35)', 'cursor:pointer',
     'display:none', 'opacity:1',
   ].join(';');
 
