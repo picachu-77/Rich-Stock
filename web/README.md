@@ -11,12 +11,32 @@ Streamlit 화면을 대신할 새 화면입니다. **한 장씩** 옮기는 중�
 | `/` | 종목 목록 — 찾기(이름·코드·초성) · 정렬 |
 | `/stock/[종목코드]` | 종목 상세 — 기간별 수익률 · 시세 차트 · 투자지표 |
 
-## Vercel 설정 (한 번만)
+## Vercel 설정
 
-1. **Settings → General → Root Directory** 를 `web` 으로
+### 사람이 화면에서 해야 하는 것 (두 가지뿐)
+
+1. **Settings → Build and Deployment → Root Directory** 를 `web` 으로
    (저장소 맨 위에는 파이썬 수집기가 있어서, 웹 화면은 `web` 폴더에 있습니다)
 2. **Settings → Environment Variables** 에 `DATABASE_URL` 추가
    Supabase 의 **Session pooler** 연결 문자열을 넣습니다.
+
+### `vercel.json` 이 대신 해주는 것
+
+`framework: "nextjs"`
+  Vercel 은 저장소 맨 위의 `app.py`(Streamlit)를 보고 이 프로젝트를
+  **파이썬 프로젝트로 기억해** 버립니다. 그러면 Next.js 를 빌드하지 않고
+  파이썬 실행 파일을 찾다가 실패합니다.
+      Error: No python entrypoint found.
+  화면 설정에서도 바꿀 수 있지만, 여기 적어두면 코드와 함께 남아서
+  다시 연결하거나 설정이 초기화돼도 같은 문제가 반복되지 않습니다.
+
+`git.deploymentEnabled`
+  작업용 가지까지 배포하면 푸시 한 번에 빌드가 두 번 돕니다. `main` 만 켭니다.
+
+> ⚠️ 이 파일에는 **주석을 쓸 수 없습니다.** Vercel 이 정해진 항목만 받기
+> 때문에 `//` 같은 키를 넣으면 빌드가 통째로 실패합니다.
+>     The `vercel.json` schema validation failed: should NOT have additional property `//`
+> 설명이 필요하면 이 문서에 적어주세요.
 
 ## 왜 이렇게 만들었나
 

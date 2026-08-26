@@ -1,23 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-
-  "//": [
-    "Vercel 이 이 프로젝트를 '파이썬' 으로 기억하고 있어서 빌드가 실패했습니다.",
-    "저장소 맨 위에 app.py(Streamlit)가 있어, 처음 연결할 때 그렇게 정해진 값이",
-    "그대로 남아 있었습니다.",
-    "",
-    "화면 설정에서 바꿀 수도 있지만, 여기에 적어두면 코드와 함께 남아서",
-    "나중에 다시 연결하거나 설정이 초기화돼도 같은 문제가 반복되지 않습니다.",
-    "",
-    "framework 를 적으면 Settings 의 Framework Preset 보다 이 값이 우선합니다."
-  ],
   "framework": "nextjs",
-
   "git": {
-    "//": [
-      "작업용 가지(main-2duhaa)까지 배포하면 푸시 한 번에 빌드가 두 번 돕니다.",
-      "실제로 쓰는 것은 main 하나뿐이라 나머지는 끕니다."
-    ],
     "deploymentEnabled": {
       "main": true,
       "main-2duhaa": false
