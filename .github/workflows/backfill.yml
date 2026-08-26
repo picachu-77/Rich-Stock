@@ -1,0 +1,116 @@
+# =============================================================
+#  과거 시세를 한 번에 채웁니다. (손으로 눌러서 실행)
+# =============================================================
+#  언제 쓰나요?
+#    · 데이터베이스를 새로 만들었을 때 (예: Neon → Supabase 이사)
+#    · 오래 멈춰 있어서 빠진 날이 많을 때
+#
+#  왜 이 파일을 만들었나요?
+#    전에는 3년치를 채우려면 내 컴퓨터에서
+#        python -m src.backfill
+#    를 켜두고 1~3시간을 기다려야 했습니다. 그동안 컴퓨터를 못 끄고,
+#    인터넷이 끊기면 처음부터 다시였습니다.
+#    깃허브에서 돌리면 컴퓨터를 꺼도 됩니다.
+#
+#  ★ 저절로 돌지 않습니다 ★
+#    한 번만 하는 무거운 일이라 일부러 '누를 때만' 돌게 해두었습니다.
+#    Actions > 과거 시세 채우기 > Run workflow
+#
+#  중간에 멈춰도 괜찮습니다
+#    받은 날짜를 ingest_log 에 적어두기 때문에, 다시 실행하면 못 받은
+#    날부터 이어서 받습니다. 깃허브가 6시간에서 끊더라도 한 번 더
+#    돌리면 됩니다.
+# =============================================================
+
+name: 과거 시세 채우기
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "최근 몇 년치를 받을지"
+        required: false
+        default: "3"
+      start:
+        description: "시작일 YYYY-MM-DD (적으면 위 '몇 년치' 는 무시됩니다)"
+        required: false
+        default: ""
+      end:
+        description: "종료일 YYYY-MM-DD (비우면 오늘)"
+        required: false
+        default: ""
+      skip_tickers:
+        description: "종목 목록 갱신 건너뛰기 (매일 수집이 이미 했다면 true)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+# 두 개가 같이 돌면 거래소가 막을 수 있으니 하나씩만 돌립니다.
+concurrency:
+  group: backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: 과거 시세 채우기
+    runs-on: ubuntu-latest
+    # 깃허브가 한 작업에 허용하는 최대치가 6시간입니다.
+    # 거기서 끊겨도 이어받기가 되므로 다시 눌러주시면 됩니다.
+    timeout-minutes: 350
+
+    steps:
+      - name: 코드 내려받기
+        uses: actions/checkout@v5
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 부품(라이브러리) 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 과거 시세 채우기
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          KRX_ID: ${{ secrets.KRX_ID }}
+          KRX_PW: ${{ secrets.KRX_PW }}
+          TZ: Asia/Seoul
+          # 공용 서버에서는 거래소에 조금 더 여유 있게 요청합니다.
+          REQUEST_DELAY_SEC: "0.8"
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.start }}" ]; then
+            ARGS="$ARGS --start ${{ github.event.inputs.start }}"
+          else
+            ARGS="$ARGS --years ${{ github.event.inputs.years }}"
+          fi
+          if [ -n "${{ github.event.inputs.end }}" ]; then
+            ARGS="$ARGS --end ${{ github.event.inputs.end }}"
+          fi
+          if [ "${{ github.event.inputs.skip_tickers }}" = "true" ]; then
+            ARGS="$ARGS --skip-tickers"
+          fi
+          echo "실행: python -m src.backfill$ARGS"
+          python -m src.backfill $ARGS
+
+      - name: 시간이 다 되어 끊겼을 때 안내
+        if: cancelled()
+        run: |
+          echo "::warning::6시간이 지나 중단되었습니다."
+          echo "받은 데이터는 그대로 남아 있습니다."
+          echo "이 워크플로를 한 번 더 실행하면 못 받은 날부터 이어서 받습니다."
+
+      - name: 실패 시 안내
+        if: failure()
+        run: |
+          echo "::error::과거 시세 채우기에 실패했습니다."
+          echo "확인할 점:"
+          echo " 1) Settings > Secrets 에 DATABASE_URL, KRX_ID, KRX_PW 가 등록되어 있는지"
+          echo " 2) 한국거래소 비밀번호 변경 요구가 떠 있지는 않은지"
+          echo " 3) 데이터베이스 용량이 꽉 차지는 않았는지"
+          echo "받은 데이터는 남아 있으므로, 고친 뒤 다시 실행하면 이어서 받습니다."

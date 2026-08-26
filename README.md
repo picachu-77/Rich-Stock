@@ -97,6 +97,16 @@ py -m venv .venv
 
 ### 2-2. 과거 3년치 채우기 — 1회 (오래 걸림)
 
+> **깃허브에서 돌리는 편이 편합니다.**
+> **Actions → 과거 시세 채우기 → Run workflow** 를 누르면 됩니다.
+> 내 컴퓨터를 켜두지 않아도 되고, 인터넷이 끊겨도 상관없습니다.
+> 데이터베이스를 새로 만들었을 때(예: 다른 곳으로 이사) 여기서 채우세요.
+>
+> 중간에 멈춰도 괜찮습니다. 받은 날짜를 적어두기 때문에 다시 누르면
+> 못 받은 날부터 이어서 받습니다.
+
+내 컴퓨터에서 직접 돌리려면:
+
 ```powershell
 .venv\Scripts\python.exe -m src.backfill
 ```
@@ -224,6 +234,7 @@ py -m venv .venv
 | `src/paper.py` | 모의투자 계산 (평균단가 · 손익 · 알림) |
 | `src/practice.py` | 모의투자를 '연습' 으로 만들기 (단계 · 복기 · 습관 점수) |
 | `.github/workflows/setup.yml` | 표가 바뀌면 자동으로 만들기 |
+| `.github/workflows/backfill.yml` | 과거 시세 채우기 (누를 때만) |
 | `.github/workflows/daily.yml` | 매일 시세 자동 실행 |
 | `.github/workflows/quarterly.yml` | 분기별 재무 자동 실행 |
 
