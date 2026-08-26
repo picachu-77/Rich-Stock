@@ -28,9 +28,25 @@ if (!url) {
 //   새로 만들면 연결이 쌓여서 한도를 넘깁니다.
 const globalForDb = globalThis as unknown as { sql?: postgres.Sql };
 
+/**
+ * SSL 을 쓸지 정합니다.
+ *
+ * Supabase 는 암호화된 연결만 받습니다. 그런데 대시보드에서 복사하는
+ * 주소에는 그 표시(sslmode)가 없어서, 그냥 두면 접속이 거부됩니다.
+ * 그래서 여기서 켜줍니다.
+ *
+ * 'require' 는 '암호화는 하되 인증서 검사는 하지 않는다' 는 뜻입니다.
+ * pooler 는 자기 이름과 다른 인증서를 쓰는 경우가 있어, 검사를 켜면
+ * 멀쩡한 연결도 막힙니다.
+ *
+ * 내 컴퓨터에서 시험할 때 쓰는 데이터베이스는 SSL 이 없으므로 끕니다.
+ */
+const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url) || url.includes("host=/");
+
 export const sql =
   globalForDb.sql ??
   postgres(url, {
+    ssl: isLocal ? false : "require",
     // Vercel 함수 하나가 동시에 여러 연결을 쥐지 않도록 적게 둡니다.
     max: 3,
     idle_timeout: 20,
