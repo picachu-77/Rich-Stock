@@ -262,6 +262,39 @@ def fill_missing_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
     return total
 
 
+def vacuum_prices(conn) -> None:
+    """
+    시세 표에서 '지운 자리' 를 다시 쓸 수 있게 표시합니다.
+
+    ★ 왜 필요한가 ★
+      PostgreSQL 은 줄을 고칠 때 원래 줄을 그 자리에 두고 새 줄을 옆에
+      씁니다. 등락률 채우기는 57만 줄을 고치는 작업이라, 그만큼의 '죽은
+      자리' 가 표 안에 쌓입니다. 그대로 두면 다음에 저장할 때 파일이
+      계속 커집니다.
+
+      지금 Supabase 무료 한도 500MB 중 431MB 를 쓰고 있어서 69MB 밖에
+      안 남았습니다. 죽은 자리를 재사용하지 않으면 채우다가 한도에 닿습니다.
+
+    ★ VACUUM FULL 이 아닙니다 ★
+      VACUUM FULL 은 표를 통째로 다시 써서 공간을 운영체제에 돌려주지만,
+      쓰는 동안 표 크기만큼(387MB) 자리가 더 필요하고 그동안 아무도 표를
+      못 씁니다. 남은 자리가 69MB 뿐인 지금은 오히려 위험합니다.
+      그냥 VACUUM 은 자리를 돌려주지는 않지만 '다시 써도 되는 자리' 로
+      표시해 줍니다. 우리에게 필요한 건 이쪽입니다.
+
+    ANALYZE 도 함께 합니다. 줄이 대량으로 바뀌면 통계가 낡아서
+    엉뚱한 실행 계획이 잡히고, 화면이 갑자기 느려집니다.
+    """
+    # VACUUM 은 트랜잭션 안에서 돌 수 없어서 잠깐 자동저장으로 바꿉니다.
+    old = conn.autocommit
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("VACUUM (ANALYZE) daily_price;")
+    finally:
+        conn.autocommit = old
+
+
 def clear_bogus_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
     """
     이미 잘못 채워진 등락률을 지웁니다.

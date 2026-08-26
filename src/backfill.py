@@ -25,6 +25,7 @@ from datetime import date, datetime, timedelta
 from .db import get_conn
 from .krx import fetch_etf_prices, fetch_stock_prices, kst_today, weekdays_between
 from .store import (
+    vacuum_prices,
     clear_bogus_change_pct,
     completed_dates,
     fill_missing_change_pct,
@@ -185,6 +186,10 @@ def main() -> None:
         # (2) 비어 있는 줄을 바로 전 거래일 종가와 비교해 다시 계산합니다
         print("  (2/2) 빈 값 계산하는 중...", flush=True)
         filled = fill_missing_change_pct(conn, progress=진행)
+        # 고친 줄이 많으면 '죽은 자리' 가 그만큼 쌓입니다. 다시 쓸 수 있게
+        # 표시해 두지 않으면 다음 저장부터 파일이 계속 커집니다.
+        print("  자리 정리 중...", flush=True)
+        vacuum_prices(conn)
         info = summary(conn)
     print(f"  잘못된 값 {cleared:,}건 제거, {filled:,}건 새로 계산 완료")
 
