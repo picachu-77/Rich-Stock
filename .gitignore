@@ -31,3 +31,5 @@ web/.next/
 web/out/
 web/.vercel/
 web/.env*.local
+web/tsconfig.tsbuildinfo
+web/next-env.d.ts
