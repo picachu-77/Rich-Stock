@@ -323,6 +323,62 @@ a { color: inherit; text-decoration: none; }
 .chart-cap .nowrap { white-space: nowrap; }
 .foot { font-size: .74rem; color: var(--ink-3); line-height: 1.65; margin: 18px 0 8px; }
 
+/* ── 뉴스 ──────────────────────────────────────────────────
+   제목이 주인공입니다. 언제·어디는 한 단계 작고 흐리게 두어,
+   훑을 때 제목만 눈에 들어오게 합니다.
+   한 줄 전체가 누르는 자리입니다. 제목 글자만 정확히 누르게 하면
+   휴대폰에서 자꾸 빗나갑니다.                                  */
+.sec-h {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 22px 0 8px;
+}
+.sec-h h2 {
+  font-size: .95rem; font-weight: 700; margin: 0; letter-spacing: -.01em;
+}
+.sec-h span { font-size: .72rem; color: var(--ink-3); }
+
+.news { list-style: none; margin: 0; padding: 0;
+        border: 1px solid var(--rule); border-radius: var(--radius);
+        overflow: hidden; background: var(--surface); }
+.news li + li { border-top: 1px solid var(--rule); }
+
+.news a {
+  display: block; padding: 12px 14px;
+  min-height: var(--tap);          /* 손끝이 닿는 넓이 */
+  color: inherit; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.news a:active { background: var(--surface-2); }
+@media (hover: hover) {
+  .news a:hover { background: var(--surface-2); }
+}
+.news a:focus-visible {
+  outline: 2px solid var(--ink); outline-offset: -2px;
+}
+
+.news-t {
+  display: block; font-size: .9rem; line-height: 1.45; font-weight: 600;
+  /* 제목이 길어도 두 줄까지만. 목록이 들쭉날쭉하면 훑기 어렵습니다. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.news-m {
+  display: block; margin-top: 4px;
+  font-size: .72rem; color: var(--ink-3);
+}
+.news-m i { font-style: normal; margin: 0 5px; }
+
+/* 첫 화면용 — 제목 한 줄. 종목 목록이 화면 밖으로 밀리지 않게 합니다. */
+.news.compact a { padding: 11px 14px; }
+.news.compact .news-t { -webkit-line-clamp: 1; font-size: .875rem; }
+
+.news-none {
+  border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink-2);
+  padding: 16px 14px; font-size: .85rem; line-height: 1.6; margin: 0;
+}
+.news-none-sub { font-size: .76rem; color: var(--ink-3); }
+
 @media (min-width: 600px) {
   .head h1 { font-size: 1.2rem; }
   .stats { grid-template-columns: repeat(5, 1fr); }

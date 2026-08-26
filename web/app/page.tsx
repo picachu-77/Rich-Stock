@@ -1,5 +1,7 @@
 import StockList from "@/components/StockList";
+import NewsList from "@/components/NewsList";
 import { getLastDate, getStocks } from "@/lib/stocks";
+import { getMarketNews, newsReady } from "@/lib/news";
 import { num } from "@/lib/format";
 
 /**
@@ -11,7 +13,11 @@ import { num } from "@/lib/format";
 export const revalidate = 3600;
 
 export default async function Home() {
-  const [stocks, lastDate] = await Promise.all([getStocks(), getLastDate()]);
+  const [stocks, lastDate, news] = await Promise.all([
+    getStocks(),
+    getLastDate(),
+    getMarketNews(3),
+  ]);
 
   // 오늘 장이 어땠는지 한 줄. 숫자를 하나하나 읽기 전에 분위기가 먼저
   // 들어옵니다. 오른 종목이 많은 날인지 내린 날인지가 이 한 줄에 있습니다.
@@ -44,6 +50,23 @@ export default async function Home() {
       </header>
 
       <main>
+        {/* 오늘 장이 어땠는지 먼저 읽고 종목을 봅니다.
+            목록은 3,900줄이라 뉴스를 아래에 두면 아무도 닿지 못합니다. */}
+        <div className="sec-h" style={{ marginTop: 4 }}>
+          <h2>오늘 증시</h2>
+          <span>네이버 뉴스</span>
+        </div>
+        <NewsList
+          articles={news}
+          ready={newsReady()}
+          empty="지금은 가져올 증시 뉴스가 없습니다."
+          compact
+        />
+
+        <div className="sec-h">
+          <h2>전체 종목</h2>
+          <span className="n">{num(stocks.length)}개</span>
+        </div>
         <StockList stocks={stocks} />
       </main>
     </div>
