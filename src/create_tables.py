@@ -232,6 +232,64 @@ CREATE INDEX IF NOT EXISTS idx_disc_cat  ON disclosure (category, rcept_dt DESC)
 """
 
 
+# ─────────────────────────────────────────────────────────────
+#  자동 생성 API 로부터 표를 잠그기
+# ─────────────────────────────────────────────────────────────
+#
+# 왜 필요한가요?
+#   Supabase 는 표를 만들면 **자동으로 인터넷에서 접근할 수 있는 API** 를
+#   함께 열어줍니다. 편하라고 만든 기능인데, 우리한테는 필요 없습니다.
+#   우리 화면은 API 가 아니라 데이터베이스에 직접 붙기 때문입니다.
+#
+#   그런데 기본값이 '누구나 읽고 쓰고 지울 수 있음' 입니다. 실제로 확인해
+#   보니 8개 표 모두 익명 사용자가 SELECT·INSERT·DELETE 를 할 수 있었습니다.
+#   3년치 시세를 통째로 지울 수도 있다는 뜻입니다.
+#
+#   (Neon 에는 이런 API 가 없어서 옮기기 전에는 없던 문제입니다)
+#
+# 무엇을 하나요?
+#   1) anon·authenticated 라는 손님용 계정에서 모든 권한을 뺍니다.
+#   2) 그래도 혹시 모르니 RLS(줄 단위 잠금)를 켭니다. 규칙을 하나도
+#      만들지 않으면 '아무도 못 봄' 이 됩니다.
+#
+# 우리 프로그램은 안 막히나요?
+#   네. 수집기와 화면은 주인 계정(postgres)으로 붙는데, 주인은 RLS 를
+#   건너뜁니다. 손님만 막힙니다.
+#
+# 다른 곳에서도 안전한가요?
+#   anon·authenticated 는 Supabase 에만 있는 계정입니다. 없으면 그냥
+#   넘어가도록 만들어서, Neon 이나 내 컴퓨터에서 돌려도 오류가 나지
+#   않습니다.
+LOCKDOWN_SQL = """
+DO $$
+DECLARE
+    guest TEXT;
+BEGIN
+    FOREACH guest IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = guest) THEN
+            EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', guest);
+            EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', guest);
+            EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', guest);
+            -- 앞으로 새로 만드는 표에도 자동으로 권한이 붙지 않게 합니다.
+            EXECUTE format(
+                'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', guest);
+            EXECUTE format(
+                'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', guest);
+        END IF;
+    END LOOP;
+END $$;
+
+ALTER TABLE ticker      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_price ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ingest_log  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE financial   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dart_log    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paper_trade ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paper_cash  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disclosure  ENABLE ROW LEVEL SECURITY;
+"""
+
+
 def main() -> None:
     print("=" * 60)
     print(" 데이터베이스에 표(테이블)를 만듭니다")
@@ -239,6 +297,8 @@ def main() -> None:
 
     with get_conn() as conn:
         run_sql(conn, SCHEMA_SQL)
+        # 표를 만든 뒤, 손님용 계정이 손대지 못하게 잠급니다. (→ LOCKDOWN_SQL)
+        run_sql(conn, LOCKDOWN_SQL)
 
         # 잘 만들어졌는지 확인해서 보여줍니다
         with conn.cursor() as cur:
@@ -275,6 +335,7 @@ def main() -> None:
     expected = 8
     if len(tables) == expected:
         print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
+        print("  자동 생성 API 로는 아무도 표를 읽거나 고칠 수 없게 잠갔습니다.")
     else:
         print(f"\n[!] 표가 {expected:,}개보다 적습니다. 오류 메시지를 확인해 주세요.")
 
