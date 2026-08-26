@@ -19,6 +19,7 @@ DART 공시 목록을 모아 창고(disclosure 표)에 쌓는 수집기.
 from __future__ import annotations
 
 import argparse
+import sys
 from datetime import date, timedelta
 
 from .dart import DartClient, DartLimitReached
@@ -149,10 +150,13 @@ def main() -> None:
     with get_conn() as conn:
         corp_map = load_corp_map(conn)
         if not corp_map:
+            # 그냥 return 하면 '성공' 으로 끝납니다.
+            # 실제로 그래서 깃허브 작업이 초록불인데 공시는 0건이었습니다.
+            # 할 일을 못 했으면 실패로 끝내야 눈에 띕니다.
             print("\n[!] ticker 표에 dart_corp_code 가 비어 있습니다.")
             print("    먼저 아래를 실행해 주세요.")
             print("      python -m src.dart_corpcode")
-            return
+            sys.exit(1)
         print(f"  대상 종목 {len(corp_map):,}개")
 
         # 기간이 길면 한 달씩 끊어서 받습니다.
