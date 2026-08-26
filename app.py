@@ -33,6 +33,7 @@ from src.fin_trend import (
     yoy_figure,
 )
 from src.market_data import (
+    NEAR_DAYS,
     PERIODS,
     RETURN_COLS,
     load_52w,
@@ -216,6 +217,13 @@ def calc_period_returns(hist: pd.DataFrame) -> dict[str, float | None]:
     """
     쌓여 있는 과거 종가로 기간별 수익률을 직접 계산합니다.
     (기준일로부터 정확히 N개월 전 이하의 가장 최근 거래일 종가와 비교)
+
+    ★ 너무 옛날 값을 끌어다 쓰지 않습니다 ★
+      'N개월 전' 이 휴장일이면 그 이전 거래일을 쓰되, NEAR_DAYS(14일)보다
+      더 거슬러 올라가야 한다면 자료가 없는 것으로 봅니다.
+      제한이 없으면, 자료가 드문드문할 때 1개월·3개월·6개월·1년 수익률이
+      모두 똑같은 값으로 나옵니다(넷 다 몇 년 전 종가 하나를 보게 됩니다).
+      → 자세한 설명은 src/market_data.py 의 NEAR_DAYS
     """
     if hist.empty:
         return {label: None for label in PERIODS}
@@ -229,7 +237,10 @@ def calc_period_returns(hist: pd.DataFrame) -> dict[str, float | None]:
     out: dict[str, float | None] = {}
     for label, m in months.items():
         cutoff = last_date - pd.DateOffset(months=m)
-        past = hist[hist["trade_date"] <= cutoff]
+        past = hist[
+            (hist["trade_date"] <= cutoff)
+            & (hist["trade_date"] >= cutoff - pd.Timedelta(days=NEAR_DAYS))
+        ]
         if past.empty:
             out[label] = None
         else:

@@ -34,6 +34,25 @@ PERIODS = {
 }
 RETURN_COLS = [f"수익률 {label}(%)" for label in PERIODS]
 
+# ★ '얼마나 옛날 값까지 N개월 전으로 인정할지' ★
+#
+# 왜 필요한가요?
+#   'N개월 전 종가' 를 찾을 때, 딱 그날이 휴장일일 수 있으니 그 이전
+#   가장 가까운 거래일을 씁니다. 그런데 제한을 두지 않으면 **몇 년 전**
+#   값까지 거슬러 올라가 버립니다.
+#
+#   실제로 이런 일이 있었습니다. 창고를 새로 만들어 자료가 드문드문할 때,
+#   1개월·3개월·6개월·1년 수익률이 모두 똑같이 +270.94% 로 나왔습니다.
+#   넷 다 3년 전 종가 하나를 보고 계산했기 때문입니다.
+#   '1개월에 270% 올랐다' 는 완전히 틀린 말이고, 그걸 보고 판단하면
+#   큰일 납니다.
+#
+# 14일인 이유
+#   설·추석 연휴가 주말과 붙어도 쉬는 날은 일주일을 넘지 않습니다.
+#   14일이면 넉넉하고, 그보다 멀면 '자료가 없는 것' 으로 봅니다.
+#   자료가 없으면 빈칸으로 둡니다. 틀린 숫자보다 빈칸이 낫습니다.
+NEAR_DAYS = 14
+
 
 # ── 데이터 읽기 (10분간 결과를 재사용해서 빠르게) ──────────────
 @st.cache_data(ttl=600, show_spinner="데이터를 불러오는 중...")
@@ -44,6 +63,8 @@ def load_overview() -> pd.DataFrame:
     수익률 계산 방식:
       (최근 종가 ÷ N개월 전 종가 - 1) × 100
       N개월 전이 휴장일이면, 그 이전 가장 가까운 거래일 종가를 씁니다.
+      다만 NEAR_DAYS(14일)보다 더 멀리까지 거슬러 올라가지는 않습니다.
+      그만큼 자료가 비어 있으면 수익률을 빈칸으로 둡니다. → NEAR_DAYS 설명
     """
     lateral_sql = "\n".join(
         f"""
@@ -52,6 +73,8 @@ def load_overview() -> pd.DataFrame:
               FROM daily_price p
              WHERE p.code = c.code
                AND p.trade_date <= c.trade_date - INTERVAL '{interval}'
+               AND p.trade_date >= c.trade_date - INTERVAL '{interval}'
+                                                 - INTERVAL '{NEAR_DAYS} days'
              ORDER BY p.trade_date DESC
              LIMIT 1
         ) AS r{i} ON TRUE"""
