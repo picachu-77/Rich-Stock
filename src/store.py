@@ -138,24 +138,61 @@ def completed_dates(conn, kind: str) -> set[date]:
 MAX_GAP_DAYS = 14
 
 
-# 한 번에 몇 종목씩 처리할지. 200개면 한 문장이 5~10초쯤 걸립니다.
-# (Supabase 의 한 문장 제한 2분에 한참 못 미치는, 안전한 크기입니다)
-CHUNK = 200
+# 한 번에 몇 종목씩 처리할지.
+#
+# 처음에 200개로 잡았다가 실패했습니다. 실제로 재보니 한 조각이
+# 7초에서 63초까지 들쭉날쭉했고, 13번째 조각이 2분을 넘겨 끊겼습니다.
+#
+#     200/4,416개 종목   63초
+#     800/4,416개 종목    8초
+#   2,400/4,416개 종목   50초
+#   2,600/4,416개 종목   2분 초과 → 실패
+#
+# 왜 들쭉날쭉한가: '종목 200개' 는 일감의 크기가 아닙니다. 3년 내내
+# 거래된 종목은 800줄이지만 얼마 전 상장한 종목은 20줄입니다. 어느
+# 200개를 잡느냐에 따라 훑는 양이 열 배씩 차이납니다.
+#
+# 그래서 50개로 줄였습니다. 가장 오래 걸렸던 조각도 1/4 이 되어
+# 16초쯤이 됩니다. 조각이 늘어난 만큼 총 시간은 비슷합니다.
+CHUNK = 50
+
+# 한 문장을 몇 분까지 기다려 줄지.
+#
+# Supabase 는 기본 2분이 지나면 문장을 끊습니다. 화면에서 쓰는 조회라면
+# 2분도 긴 시간이라 옳은 설정이지만, 이건 몇십 분 걸리는 정리 작업입니다.
+# 조각 하나가 어쩌다 오래 걸린다고 작업 전체가 죽으면 곤란해서,
+# 이 작업에서만 넉넉하게 늘려 둡니다. (조각을 작게 나눠 두었으므로
+# 실제로 여기까지 갈 일은 거의 없습니다. 안전장치입니다)
+STATEMENT_TIMEOUT = "10min"
 
 
-def _price_codes(conn) -> list[str]:
+def _price_codes(conn, only_missing: bool = False) -> list[str]:
     """
-    시세 표에 들어 있는 종목 코드를 전부 가져옵니다.
+    시세 표에 들어 있는 종목 코드를 가져옵니다.
 
     종목 목록(ticker) 표를 쓰지 않는 이유:
       상장폐지된 종목은 목록에서 빠지지만 과거 시세는 그대로 남아 있습니다.
       실제로 목록에는 3,931개인데 시세 표에는 4,416개가 있었습니다.
       목록만 보고 돌리면 나머지 485개를 통째로 빠뜨리게 됩니다.
+
+    only_missing 이면 등락률이 비어 있는 종목만 가져옵니다.
+      채울 것이 없는 종목까지 훑는 것은 그냥 낭비입니다. 게다가 이 값이
+      채워질수록 다음 실행은 저절로 빨라집니다.
     """
+    where = "WHERE change_pct IS NULL " if only_missing else ""
     return [
         r[0]
-        for r in fetch_all(conn, "SELECT DISTINCT code FROM daily_price ORDER BY code;")
+        for r in fetch_all(
+            conn, f"SELECT DISTINCT code FROM daily_price {where}ORDER BY code;"
+        )
     ]
+
+
+def _relax_timeout(conn) -> None:
+    """이 연결에서만 문장 시간 제한을 늘립니다. (원래 설정은 건드리지 않습니다)"""
+    with conn.cursor() as cur:
+        cur.execute(f"SET statement_timeout = '{STATEMENT_TIMEOUT}';")
+    conn.commit()
 
 
 def fill_missing_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
@@ -181,7 +218,10 @@ def fill_missing_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
       나눠서 처리해도 결과가 똑같습니다. 대신 한 문장이 짧아져 끊기지
       않고, 도중에 멈춰도 이미 채운 것은 남습니다.
     """
-    codes = _price_codes(conn)
+    _relax_timeout(conn)
+    # 채울 것이 있는 종목만 봅니다. 4,416개 중 실제로 빈 곳이 있는 종목은
+    # 훨씬 적고, 채워질수록 다음 실행은 더 빨라집니다.
+    codes = _price_codes(conn, only_missing=True)
     if not codes:
         return 0
 
@@ -232,6 +272,9 @@ def clear_bogus_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
     fill_missing_change_pct 와 같은 이유로 종목을 나눠서 처리합니다.
     (한 문장이 2분을 넘기면 Supabase 가 중간에 끊어버립니다)
     """
+    _relax_timeout(conn)
+    # 여기는 전체 종목을 봐야 합니다. 잘못된 값은 '비어 있지 않은' 줄에
+    # 들어 있으므로, 비어 있는 종목만 보면 찾을 수가 없습니다.
     codes = _price_codes(conn)
     if not codes:
         return 0
