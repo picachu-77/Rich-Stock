@@ -24,3 +24,10 @@ desktop.ini
 # 전달용으로 만든 압축 파일은 저장소에 넣지 않습니다
 *.zip
 *.patch
+
+# 웹 화면(Next.js)이 자동으로 만드는 것들
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+web/.env*.local

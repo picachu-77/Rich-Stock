@@ -1,0 +1,191 @@
+/* ─────────────────────────────────────────────────────────────
+   전체 공통 꾸미기
+
+   휴대폰에서 쓰는 것을 먼저 생각하고 만들었습니다.
+   · 누르는 것은 모두 최소 48px  (손끝이 닿는 넓이가 대략 45px 입니다)
+   · 글자는 16px 이상            (그보다 작으면 아이폰이 화면을 확대합니다)
+   · 색은 한국 방식             (오르면 빨강, 내리면 파랑)
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --line: #e5e9f0;
+  --ink: #101828;
+  --ink-soft: #667085;
+  --brand: #2563eb;
+  --brand-soft: #eff6ff;
+  --up: #e5484d;
+  --down: #2563eb;
+  --tap: 48px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Pretendard", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  /* 아이폰에서 가로로 회전해도 글자가 제멋대로 커지지 않게 */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 숫자는 자릿수가 흔들리지 않게 폭이 같은 글꼴로 */
+.tnum { font-variant-numeric: tabular-nums; }
+
+.up   { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--ink-soft); }
+
+a { color: inherit; text-decoration: none; }
+
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 12px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── 맨 위 머리띠 ─────────────────────────────────────────── */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(247, 248, 250, .92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+}
+.top-in { max-width: 720px; margin: 0 auto; }
+.title { font-size: 1.15rem; font-weight: 800; margin: 0; letter-spacing: -.3px; }
+.sub { font-size: .82rem; color: var(--ink-soft); margin-top: 2px; }
+
+/* ── 검색칸 ──────────────────────────────────────────────── */
+.search {
+  width: 100%;
+  min-height: var(--tap);
+  margin-top: 10px;
+  padding: 0 14px;
+  font-size: 16px;           /* 16px 미만이면 아이폰이 확대해 버립니다 */
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+}
+.search:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+/* ── 가로로 미는 알약 단추 (정렬 기준 고르기) ─────────────── */
+.pills {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 10px 0 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.pills::-webkit-scrollbar { display: none; }
+.pill {
+  flex: 0 0 auto;
+  /* 손끝이 닿는 넓이가 대략 45px 이라 그보다 크게 잡습니다.
+     40px 로 뒀더니 옆 단추를 누르게 되더군요. */
+  min-height: var(--tap);
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pill[aria-pressed="true"] {
+  color: #1d4ed8;
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+/* ── 종목 한 줄 ──────────────────────────────────────────── */
+.card {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  min-height: var(--tap);
+}
+.card:active { background: #f2f5fa; }
+.card-top { display: flex; align-items: baseline; gap: 8px; }
+.card-name { font-weight: 700; font-size: 1rem; }
+.card-code { font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.card-tag {
+  margin-left: auto;
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.card-mid { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
+.card-price { font-size: 1.05rem; font-weight: 800; }
+.card-chg { font-size: .9rem; font-weight: 700; }
+.card-sub {
+  margin-top: 6px;
+  font-size: .8rem;
+  color: var(--ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.card-sub b { color: var(--ink); font-weight: 700; }
+
+/* ── 안내 상자 ───────────────────────────────────────────── */
+.note {
+  background: var(--brand-soft);
+  border: 1px solid #b2ddff;
+  color: #175cd3;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: .9rem;
+  margin: 10px 0;
+}
+.empty { text-align: center; color: var(--ink-soft); padding: 40px 0; font-size: .95rem; }
+
+/* ── 종목 상세 ───────────────────────────────────────────── */
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.metric {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+}
+.metric-l { font-size: .74rem; color: var(--ink-soft); }
+.metric-v { font-size: .95rem; font-weight: 800; margin-top: 3px; }
+.metric-v.none { color: #98a2b3; font-weight: 600; }
+
+@media (min-width: 640px) {
+  .wrap { padding: 0 16px 32px; }
+  .title { font-size: 1.35rem; }
+}
