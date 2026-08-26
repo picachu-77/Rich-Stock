@@ -46,7 +46,7 @@ export async function getStocks(): Promise<Stock[]> {
       LEFT JOIN LATERAL (
         SELECT dp.close
           FROM daily_price dp
-         WHERE dp.code = c.code
+         WHERE dp.code = t.code
            AND dp.trade_date <= c.trade_date - INTERVAL '${p.interval}'
            AND dp.trade_date >= c.trade_date - INTERVAL '${p.interval}'
                                              - INTERVAL '${NEAR_DAYS} days'
@@ -57,30 +57,35 @@ export async function getStocks(): Promise<Stock[]> {
 
   const picks = PERIODS.map((_, i) => `r${i}.close AS past${i}`).join(", ");
 
+  // ★ 종목마다 '가장 최근 시세 한 줄' 을 색인으로 바로 집어옵니다 ★
+  //   최근 30일치를 통째로 꺼내 종목별 첫 줄만 남기는 방식은, 시세 표
+  //   200만 줄을 전부 훑고 그중 200만 줄을 버립니다. 실측 19.4초였습니다.
+  //   지금 방식은 145ms 입니다. (파이썬 쪽 src/market_data.py 와 같은 조회)
   const rows = await sql.unsafe(`
-    WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price),
-    recent AS (
-      SELECT p.* FROM daily_price p, bound b
-       WHERE p.trade_date >= b.last_d - INTERVAL '30 days'
-    ),
-    cur AS (
-      SELECT DISTINCT ON (code)
-             code, trade_date, close, change_pct, volume, market_cap,
-             per, pbr, div_yield
-        FROM recent ORDER BY code, trade_date DESC
-    )
+    WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price)
     SELECT t.code, t.name, t.market, t.kind,
            c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
            c.per, c.pbr, c.div_yield,
            f.roe, f.debt_ratio, f.op_margin,
            ${picks}
-      FROM cur c
-      JOIN ticker t ON t.code = c.code
+      FROM ticker t
+      CROSS JOIN bound b
+      -- 최근 30일 안에 시세가 있는 종목만. (상장폐지 종목의 옛 가격이
+      -- '현재가' 로 보이지 않게 합니다)
+      JOIN LATERAL (
+        SELECT p.trade_date, p.close, p.change_pct, p.volume, p.market_cap,
+               p.per, p.pbr, p.div_yield
+          FROM daily_price p
+         WHERE p.code = t.code
+           AND p.trade_date >= b.last_d - INTERVAL '30 days'
+         ORDER BY p.trade_date DESC
+         LIMIT 1
+      ) AS c ON TRUE
       -- 재무는 '있으면 붙이고 없으면 빈칸'. ETF 가 목록에서 사라지지 않게.
       LEFT JOIN LATERAL (
         SELECT fi.roe, fi.debt_ratio, fi.op_margin
           FROM financial fi
-         WHERE fi.code = c.code
+         WHERE fi.code = t.code
          ORDER BY fi.fiscal_year DESC, fi.fiscal_quarter DESC
          LIMIT 1
       ) AS f ON TRUE

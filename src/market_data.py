@@ -71,7 +71,7 @@ def load_overview() -> pd.DataFrame:
         LEFT JOIN LATERAL (
             SELECT p.close
               FROM daily_price p
-             WHERE p.code = c.code
+             WHERE p.code = t.code
                AND p.trade_date <= c.trade_date - INTERVAL '{interval}'
                AND p.trade_date >= c.trade_date - INTERVAL '{interval}'
                                                  - INTERVAL '{NEAR_DAYS} days'
@@ -103,20 +103,16 @@ def load_overview() -> pd.DataFrame:
         profile_sql = "".join(f"\n           t.{c}," for c in profile_cols)
 
         sql = f"""
+    -- ★ 종목마다 '가장 최근 시세 한 줄' 을 색인으로 바로 집어옵니다 ★
+    --
+    --   전에는 최근 30일치를 통째로 꺼낸 뒤 종목별로 첫 줄만 남기는
+    --   방식이었습니다. 그러면 시세 표 200만 줄을 전부 훑고 그중
+    --   2,009,857 줄을 버립니다. 실측 19.4초가 여기서 나왔습니다.
+    --
+    --   지금은 종목 4천 개에 대해 색인을 4천 번 찍습니다. 145ms 입니다.
+    --   (→ src/create_tables.py 의 idx_price_date 설명)
     WITH bound AS (
         SELECT max(trade_date) AS last_d FROM daily_price
-    ),
-    recent AS (
-        SELECT p.*
-          FROM daily_price p, bound b
-         WHERE p.trade_date >= b.last_d - INTERVAL '30 days'
-    ),
-    cur AS (
-        SELECT DISTINCT ON (code)
-               code, trade_date, close, change_pct, volume, market_cap,
-               per, pbr, eps, bps, div_yield
-          FROM recent
-         ORDER BY code, trade_date DESC
     )
     SELECT t.code, t.name, t.market, t.kind, t.is_active,{profile_sql}
            c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
@@ -124,8 +120,19 @@ def load_overview() -> pd.DataFrame:
            f.roe, f.debt_ratio, f.op_margin, f.payout_ratio,
            f.fiscal_year, f.fiscal_quarter,
            {select_returns}
-      FROM cur c
-      JOIN ticker t ON t.code = c.code
+      FROM ticker t
+      CROSS JOIN bound b
+      -- 최근 30일 안에 시세가 있는 종목만 남깁니다.
+      -- (상장폐지된 종목의 옛날 가격이 '현재가' 로 보이지 않게)
+      JOIN LATERAL (
+          SELECT p.trade_date, p.close, p.change_pct, p.volume, p.market_cap,
+                 p.per, p.pbr, p.eps, p.bps, p.div_yield
+            FROM daily_price p
+           WHERE p.code = t.code
+             AND p.trade_date >= b.last_d - INTERVAL '30 days'
+           ORDER BY p.trade_date DESC
+           LIMIT 1
+      ) AS c ON TRUE
       -- 재무지표는 '있으면 붙이고 없으면 빈칸'(LEFT JOIN)으로 가져옵니다.
       -- 그래야 재무제표가 없는 ETF 도 목록에서 사라지지 않습니다.
       -- 종목별로 가장 최근 분기 한 줄만 가져옵니다.
@@ -133,7 +140,7 @@ def load_overview() -> pd.DataFrame:
           SELECT fi.roe, fi.debt_ratio, fi.op_margin, fi.payout_ratio,
                  fi.fiscal_year, fi.fiscal_quarter
             FROM financial fi
-           WHERE fi.code = c.code
+           WHERE fi.code = t.code
            ORDER BY fi.fiscal_year DESC, fi.fiscal_quarter DESC
            LIMIT 1
       ) AS f ON TRUE

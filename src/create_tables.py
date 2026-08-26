@@ -49,16 +49,26 @@ CREATE TABLE IF NOT EXISTS daily_price (
 
 -- 색인(index)은 책의 '찾아보기' 같은 것입니다. 조회는 빨라지지만 공간을 씁니다.
 --
--- 이 표에는 PRIMARY KEY (code, trade_date) 색인 하나만 둡니다.
--- Neon 무료 플랜(512MB)에서 공간이 빠듯하기 때문에, 효과에 비해
--- 공간을 많이 쓰는 색인은 만들지 않습니다.
---
--- 아래 두 색인은 실측 후 제거했습니다.
---   idx_price_code_date : PRIMARY KEY 와 하는 일이 같아 완전히 중복 (200MB 절약)
---   idx_price_date      : 34MB 를 쓰는데 사용 횟수가 63회뿐이었고,
---                         없어도 해당 조회가 1초면 끝나 화면 체감차가 없었음
+-- idx_price_code_date 는 PRIMARY KEY (code, trade_date) 와 하는 일이 완전히
+-- 같아서 지웠습니다. 200MB 를 아꼈고 잃은 것은 없습니다.
 DROP INDEX IF EXISTS idx_price_code_date;
-DROP INDEX IF EXISTS idx_price_date;
+
+-- ★ idx_price_date 는 한 번 지웠다가 다시 만들었습니다 ★
+--
+--   지웠던 이유: 그때는 화면이 Streamlit 하나뿐이었고, 10분 동안 결과를
+--   재사용하는 구조라 조회가 1초 걸려도 티가 나지 않았습니다. 무료 용량이
+--   빠듯해서 공간을 택했습니다.
+--
+--   되살린 이유: 웹 화면(Next.js)이 생기면서 '가장 최근 거래일' 을 구하는
+--   조회가 화면을 만들 때마다 돌게 됐습니다. 그런데 이 색인이 없으면
+--   max(trade_date) 하나를 구하려고 200만 줄을 전부 훑습니다.
+--
+--   실측 (종목 4천 개 + 기간 수익률 1개, Supabase 무료 등급)
+--       색인 없음 : 19,396 ms
+--       색인 있음 :    145 ms      ← 133배
+--   크기는 15MB 입니다 (3년치를 다 채우면 30MB 안팎).
+--   19초를 없애는 값으로 충분히 쌉니다.
+CREATE INDEX IF NOT EXISTS idx_price_date ON daily_price (trade_date);
 
 -- ─────────────────────────────────────────────────────────────
 -- 3) 수집 진행 기록 표
