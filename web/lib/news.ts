@@ -242,11 +242,27 @@ async function ask(query: string, display: number): Promise<NaverItem[]> {
       // 부르면 하루 한도(25,000번)를 금방 씁니다.
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      // 화면에는 조용히 '기사 없음' 으로 나가지만, 왜 실패했는지는
+      // 남겨야 합니다. 안 남기면 '열쇠가 틀린 것' 과 '기사가 없는 것' 을
+      // 구분할 수 없어서, 안 나올 때 손댈 곳을 못 찾습니다.
+      // (Vercel > 프로젝트 > Logs 에서 보입니다)
+      //
+      // 401 = 열쇠가 틀림 · 403 = 이 열쇠로는 검색을 못 씀
+      // 429 = 하루 한도(25,000번) 초과
+      //
+      // 열쇠 자체는 절대 찍지 않습니다. 로그도 남는 기록입니다.
+      console.error(
+        `[뉴스] 네이버가 거절했습니다 — HTTP ${res.status}. ` +
+          `응답: ${(await res.text()).slice(0, 200)}`,
+      );
+      return [];
+    }
     const data = (await res.json()) as { items?: NaverItem[] };
     return data.items ?? [];
-  } catch {
+  } catch (err) {
     // 네이버가 느리거나 잠깐 막혀도 종목 화면은 열려야 합니다.
+    console.error("[뉴스] 네이버를 부르지 못했습니다:", err);
     return [];
   }
 }
