@@ -1,7 +1,9 @@
 import StockList from "@/components/StockList";
 import NewsList from "@/components/NewsList";
+import DisclosureList from "@/components/DisclosureList";
 import { getLastDate, getStocks } from "@/lib/stocks";
 import { getMarketNews, newsReady } from "@/lib/news";
+import { getRecentDisclosures } from "@/lib/disclosures";
 import { num } from "@/lib/format";
 
 /**
@@ -13,10 +15,11 @@ import { num } from "@/lib/format";
 export const revalidate = 3600;
 
 export default async function Home() {
-  const [stocks, lastDate, news] = await Promise.all([
+  const [stocks, lastDate, disclosures, news] = await Promise.all([
     getStocks(),
     getLastDate(),
-    getMarketNews(3),
+    getRecentDisclosures(4),
+    newsReady() ? getMarketNews(3) : Promise.resolve([]),
   ]);
 
   // 오늘 장이 어땠는지 한 줄. 숫자를 하나하나 읽기 전에 분위기가 먼저
@@ -50,18 +53,32 @@ export default async function Home() {
       </header>
 
       <main>
-        {/* 오늘 장이 어땠는지 먼저 읽고 종목을 봅니다.
-            목록은 3,900줄이라 뉴스를 아래에 두면 아무도 닿지 못합니다. */}
+        {/* 무슨 일이 있었는지 먼저 읽고 종목을 봅니다.
+            목록은 3,900줄이라 아래에 두면 아무도 닿지 못합니다. */}
         <div className="sec-h" style={{ marginTop: 4 }}>
-          <h2>오늘 증시</h2>
-          <span>네이버 뉴스</span>
+          <h2>최근 공시</h2>
+          <span>전자공시(DART)</span>
         </div>
-        <NewsList
-          articles={news}
-          ready={newsReady()}
-          empty="지금은 가져올 증시 뉴스가 없습니다."
-          compact
+        <DisclosureList
+          items={disclosures}
+          empty="최근 일주일 사이 올라온 공시가 없습니다."
+          showName
         />
+
+        {newsReady() && (
+          <>
+            <div className="sec-h">
+              <h2>오늘 증시</h2>
+              <span>네이버 뉴스</span>
+            </div>
+            <NewsList
+              articles={news}
+              ready
+              empty="지금은 가져올 증시 뉴스가 없습니다."
+              compact
+            />
+          </>
+        )}
 
         <div className="sec-h">
           <h2>전체 종목</h2>

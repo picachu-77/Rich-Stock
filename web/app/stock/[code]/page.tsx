@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PriceChart from "@/components/PriceChart";
 import NewsList from "@/components/NewsList";
+import DisclosureList from "@/components/DisclosureList";
 import { getHistory, getStock } from "@/lib/stocks";
 import { getStockNews, newsReady } from "@/lib/news";
+import { getStockDisclosures } from "@/lib/disclosures";
 import { PERIODS } from "@/lib/periods";
 import { eok, limitHit, num, railWidth, signed, tone } from "@/lib/format";
 
@@ -18,9 +20,12 @@ export default async function StockPage({
   const [stock, history] = await Promise.all([getStock(code), getHistory(code)]);
   if (!stock) notFound();
 
-  // 뉴스는 종목 이름으로 찾기 때문에 종목을 먼저 확인한 뒤에 부릅니다.
-  // 네이버가 느리거나 열쇠가 없어도 이 화면은 그대로 열립니다.
-  const news = await getStockNews(stock.name);
+  // 공시는 창고에서 바로 읽습니다. 뉴스는 종목 이름으로 찾기 때문에
+  // 종목을 확인한 뒤에 부릅니다. 둘 다 실패해도 이 화면은 열립니다.
+  const [disclosures, news] = await Promise.all([
+    getStockDisclosures(stock.code),
+    newsReady() ? getStockNews(stock.name) : Promise.resolve([]),
+  ]);
 
   const dir = tone(stock.change_pct);
   const lim = limitHit(stock.change_pct);
@@ -87,15 +92,30 @@ export default async function StockPage({
           <Fact k="부채비율" v={stock.debt_ratio !== null ? `${num(stock.debt_ratio, 0)}%` : ""} />
         </div>
 
+        {/* 공시가 먼저입니다. 회사가 직접 신고한 사실이라 기사보다
+            정확합니다. 뉴스는 열쇠가 있을 때만 그 아래에 붙습니다. */}
         <div className="sec-h">
-          <h2>관련 뉴스</h2>
-          <span>네이버 뉴스</span>
+          <h2>공시</h2>
+          <span>전자공시(DART)</span>
         </div>
-        <NewsList
-          articles={news}
-          ready={newsReady()}
-          empty={`최근 '${stock.name}' 이야기를 다룬 기사를 찾지 못했습니다. 이름이 짧거나 비슷한 회사가 많으면 확실한 것만 남기느라 비어 있을 수 있습니다.`}
+        <DisclosureList
+          items={disclosures}
+          empty={`최근 1년 사이 '${stock.name}' 이름으로 올라온 공시가 없습니다. ETF 는 회사가 아니라서 공시가 없습니다.`}
         />
+
+        {newsReady() && (
+          <>
+            <div className="sec-h">
+              <h2>관련 뉴스</h2>
+              <span>네이버 뉴스</span>
+            </div>
+            <NewsList
+              articles={news}
+              ready
+              empty={`최근 '${stock.name}' 이야기를 다룬 기사를 찾지 못했습니다. 이름이 짧거나 비슷한 회사가 많으면 확실한 것만 남기느라 비어 있을 수 있습니다.`}
+            />
+          </>
+        )}
 
         <p className="foot">
           PER·PBR·배당수익률은 한국거래소, ROE·부채비율은 DART 전자공시 기준입니다.

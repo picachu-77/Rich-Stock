@@ -372,6 +372,19 @@ a { color: inherit; text-decoration: none; }
 .news.compact a { padding: 11px 14px; }
 .news.compact .news-t { -webkit-line-clamp: 1; font-size: .875rem; }
 
+/* 공시 — 갈래를 제목 위에 얹습니다. */
+.dc-top { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
+.dc-name { font-size: .78rem; font-weight: 700; }
+.dc-cat {
+  font-size: .68rem; color: var(--ink-3);
+  border: 1px solid var(--rule-2); border-radius: 999px;
+  padding: 1px 7px; white-space: nowrap;
+}
+/* 이 화면에서 색이 붙는 유일한 공시. 놓치면 안 되는 것들입니다. */
+.dc-cat.warn {
+  color: var(--up); border-color: var(--up); font-weight: 700;
+}
+
 .news-none {
   border: 1px solid var(--rule); border-radius: var(--radius);
   background: var(--surface); color: var(--ink-2);
