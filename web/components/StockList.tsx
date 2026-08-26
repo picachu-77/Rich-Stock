@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { Stock } from "@/lib/stocks";
+import type { ListStock } from "@/lib/stocks";
 import { chosungOf, scoreOf } from "@/lib/search";
 import { eok, num, signed, tone, won } from "@/lib/format";
 
@@ -35,7 +35,7 @@ const SORTS: SortKey[] = [
 /** 한 번에 그리는 개수. 너무 많이 그리면 휴대폰이 버벅입니다. */
 const PAGE = 40;
 
-export default function StockList({ stocks }: { stocks: Stock[] }) {
+export default function StockList({ stocks }: { stocks: ListStock[] }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("시가총액");
   const [shown, setShown] = useState(PAGE);
@@ -64,7 +64,7 @@ export default function StockList({ stocks }: { stocks: Stock[] }) {
     }
 
     // 값이 없는 종목은 늘 뒤로 보냅니다. 빈칸이 1등에 오면 이상합니다.
-    const by = (get: (s: Stock) => number | null, asc = false) =>
+    const by = (get: (s: ListStock) => number | null, asc = false) =>
       [...list].sort((a, b) => {
         const x = get(a);
         const y = get(b);
@@ -78,9 +78,9 @@ export default function StockList({ stocks }: { stocks: Stock[] }) {
       case "등락률":
         return by((s) => s.change_pct);
       case "수익률 1개월":
-        return by((s) => s.returns[0]);
+        return by((s) => s.ret1m);
       case "수익률 1년":
-        return by((s) => s.returns[3]);
+        return by((s) => s.ret1y);
       case "PER 낮은 순":
         // PER 이 0 이하인 것은 '계산 불가' 라 순위에서 뺍니다.
         return by((s) => (s.per !== null && s.per > 0 ? s.per : null), true);
@@ -158,9 +158,9 @@ export default function StockList({ stocks }: { stocks: Stock[] }) {
 
           <div className="card-sub tnum">
             {s.market_cap !== null && <span>시총 <b>{eok(s.market_cap)}</b></span>}
-            {s.returns[3] !== null && (
+            {s.ret1y !== null && (
               <span>
-                1년 <b className={tone(s.returns[3])}>{signed(s.returns[3])}%</b>
+                1년 <b className={tone(s.ret1y)}>{signed(s.ret1y)}%</b>
               </span>
             )}
             {s.per !== null && s.per > 0 && <span>PER <b>{num(s.per, 2)}</b></span>}
