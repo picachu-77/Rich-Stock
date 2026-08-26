@@ -50,3 +50,30 @@ export const tone = (v: number | null | undefined): string =>
       : v < 0
         ? "down"
         : "flat";
+
+/**
+ * 상한가·하한가인지.
+ *
+ * 한국 증시는 하루에 오르내릴 수 있는 폭이 ±30% 로 정해져 있습니다.
+ * 그 끝에 닿은 것은 보통 일이 아니라서 따로 표시해 줍니다.
+ * (다른 나라 증시에는 없는 규칙이라 이 화면에만 있는 표시입니다)
+ */
+export const limitHit = (v: number | null | undefined): "up" | "down" | null => {
+  if (v === null || v === undefined || Number.isNaN(v)) return null;
+  if (v >= 29.5) return "up";
+  if (v <= -29.5) return "down";
+  return null;
+};
+
+/**
+ * 등락 막대의 길이(%).
+ *
+ * ±5% 를 꽉 찬 길이로 봅니다. 대부분의 날은 ±3% 안쪽이라, ±30% 를 기준으로
+ * 삼으면 거의 모든 막대가 점처럼 보여서 아무것도 알 수 없습니다.
+ * 5% 를 넘는 큰 움직임은 막대가 끝까지 찬 것으로 보여주고, 정확한 값은
+ * 옆의 숫자가 알려줍니다.
+ */
+export const railWidth = (v: number | null | undefined): number => {
+  if (v === null || v === undefined || Number.isNaN(v)) return 0;
+  return Math.min(Math.abs(v) / 5, 1) * 50; // 가운데 기준이라 최대 50%
+};

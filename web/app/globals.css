@@ -1,191 +1,329 @@
-/* ─────────────────────────────────────────────────────────────
-   전체 공통 꾸미기
+/* ═══════════════════════════════════════════════════════════════
+   국내주식 대시보드 — 화면 공통
 
-   휴대폰에서 쓰는 것을 먼저 생각하고 만들었습니다.
-   · 누르는 것은 모두 최소 48px  (손끝이 닿는 넓이가 대략 45px 입니다)
-   · 글자는 16px 이상            (그보다 작으면 아이폰이 화면을 확대합니다)
-   · 색은 한국 방식             (오르면 빨강, 내리면 파랑)
-   ───────────────────────────────────────────────────────────── */
+   ★ 이 디자인의 규칙 하나 ★
+     한국 증시에서 빨강(상승)·파랑(하락)은 꾸밈이 아니라 '정보' 입니다.
+     그래서 화면의 나머지는 전부 무채색으로 둡니다. 단추도 파랗지
+     않습니다. 파란 단추는 '하락' 과 같은 색이라 눈이 헷갈립니다.
+     진한 색이 보이면 그건 언제나 시세입니다.
+
+   글꼴
+     한글은 휴대폰에 이미 들어 있는 글꼴을 씁니다. 한글 웹폰트는 글자가
+     수천 자라 몇 MB 를 내려받아야 해서, 느리다는 문제를 더 키웁니다.
+     대신 **숫자만** 전용 글꼴(IBM Plex Mono)을 씁니다. 폭이 일정해서
+     목록을 훑을 때 자릿수가 흔들리지 않고, 시세판 같은 인상을 줍니다.
+
+   손가락
+     누르는 것은 48px 이상. 손끝이 닿는 넓이가 대략 45px 입니다.
+   ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg: #f7f8fa;
-  --card: #ffffff;
-  --line: #e5e9f0;
-  --ink: #101828;
-  --ink-soft: #667085;
-  --brand: #2563eb;
-  --brand-soft: #eff6ff;
-  --up: #e5484d;
-  --down: #2563eb;
-  --tap: 48px;
+  --paper:       #fcfcfa;
+  --surface:     #ffffff;
+  --surface-2:   #f4f4f1;
+
+  --ink:         #15171c;
+  --ink-2:       #565c66;
+  --ink-3:       #6b7178;   /* 4.80:1 — 웹 접근성 기준(4.5:1) 통과 */
+
+  --rule:        #e6e7e2;
+  --rule-2:      #d2d4ce;
+
+  /* 시세 — 화면에서 유일하게 진한 색 */
+  --up:          #d62b24;   /* 글자용 (대비 확보) */
+  --up-bar:      #e8443c;   /* 막대용 */
+  --down:        #1b54c0;
+  --down-bar:    #2d6be0;
+  --flat:        #6b7178;
+
+  --tap:         48px;
+  --gap:         12px;
+  --radius:      14px;
+}
+
+/* 어두운 곳에서 보실 때. 밤에 휴대폰으로 보는 일이 많습니다. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:     #0e0f12;
+    --surface:   #16181d;
+    --surface-2: #1d2027;
+    --ink:       #edeeea;
+    --ink-2:     #a2a8b0;
+    --ink-3:     #868c94;   /* 5.65:1 */
+    --rule:      #24272e;
+    --rule-2:    #333741;
+    --up:        #ff6b62;
+    --up-bar:    #ff6b62;
+    --down:      #6fa0ff;
+    --down-bar:  #6fa0ff;
+    --flat:      #868c94;
+  }
 }
 
 * { box-sizing: border-box; }
 
-html, body {
+html { -webkit-text-size-adjust: 100%; }
+
+body {
   margin: 0;
-  padding: 0;
-  background: var(--bg);
+  background: var(--paper);
   color: var(--ink);
+  /* 한글은 기기에 있는 글꼴로. 내려받지 않으니 곧바로 뜹니다. */
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-    "Pretendard", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
-  /* 아이폰에서 가로로 회전해도 글자가 제멋대로 커지지 않게 */
-  -webkit-text-size-adjust: 100%;
+    "Noto Sans KR", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  font-size: 16px;          /* 16px 미만이면 아이폰이 화면을 확대합니다 */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 숫자는 자릿수가 흔들리지 않게 폭이 같은 글꼴로 */
-.tnum { font-variant-numeric: tabular-nums; }
-
-.up   { color: var(--up); }
-.down { color: var(--down); }
-.flat { color: var(--ink-soft); }
+/* 숫자는 전용 글꼴 + 폭 고정. 목록에서 자릿수가 흔들리지 않습니다. */
+.n {
+  font-family: var(--font-mono), ui-monospace, "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
 
 a { color: inherit; text-decoration: none; }
 
-.wrap {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 12px calc(24px + env(safe-area-inset-bottom, 0px));
+/* 키보드로 옮겨 다닐 때 지금 어디인지 또렷하게 */
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* ── 맨 위 머리띠 ─────────────────────────────────────────── */
-.top {
+/* 움직임을 줄이도록 설정한 기기에서는 전환 효과를 끕니다 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+.wrap { max-width: 680px; margin: 0 auto; padding: 0 14px; }
+
+/* ── 머리말 ───────────────────────────────────────────────── */
+.head {
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 0 10px;
+}
+.head-top { display: flex; align-items: baseline; gap: 10px; }
+.head h1 {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.head-date { font-size: .78rem; color: var(--ink-3); margin-left: auto; }
+
+/* 오늘 장이 어땠는지 한 줄로. 숫자를 읽기 전에 분위기가 먼저 들어옵니다. */
+.breadth {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: .82rem;
+  color: var(--ink-2);
+}
+.breadth b { font-weight: 700; }
+.breadth .up   { color: var(--up); }
+.breadth .down { color: var(--down); }
+.breadth-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  background: var(--rule);
+  min-width: 60px;
+}
+.breadth-bar i { display: block; height: 100%; }
+.breadth-bar .b-up   { background: var(--up-bar); }
+.breadth-bar .b-down { background: var(--down-bar); }
+
+/* ── 검색 + 정렬 (위에 붙어 따라옵니다) ───────────────────── */
+.sticky {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: rgba(247, 248, 250, .92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line);
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+  z-index: 20;
+  background: var(--paper);
+  padding: 8px 0 6px;
+  border-bottom: 1px solid var(--rule);
 }
-.top-in { max-width: 720px; margin: 0 auto; }
-.title { font-size: 1.15rem; font-weight: 800; margin: 0; letter-spacing: -.3px; }
-.sub { font-size: .82rem; color: var(--ink-soft); margin-top: 2px; }
-
-/* ── 검색칸 ──────────────────────────────────────────────── */
+.search-box { position: relative; }
 .search {
   width: 100%;
   min-height: var(--tap);
-  margin-top: 10px;
-  padding: 0 14px;
-  font-size: 16px;           /* 16px 미만이면 아이폰이 확대해 버립니다 */
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  padding: 0 44px 0 14px;
+  font: inherit;
+  font-size: 16px;
   color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid var(--rule-2);
+  border-radius: var(--radius);
 }
-.search:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+.search::placeholder { color: var(--ink-3); }
+.search:focus { outline: 3px solid var(--ink); outline-offset: 1px; border-color: var(--ink); }
+.search-x {
+  position: absolute;
+  right: 4px; top: 0;
+  width: 44px; height: var(--tap);
+  display: grid; place-items: center;
+  background: none; border: 0; cursor: pointer;
+  color: var(--ink-3); font-size: 1.1rem;
+}
 
-/* ── 가로로 미는 알약 단추 (정렬 기준 고르기) ─────────────── */
-.pills {
-  display: flex;
-  gap: 6px;
+.chips {
+  display: flex; gap: 6px;
+  margin-top: 8px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 10px 0 2px;
   -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
 }
-.pills::-webkit-scrollbar { display: none; }
-.pill {
+.chips::-webkit-scrollbar { display: none; }
+.chip {
   flex: 0 0 auto;
-  /* 손끝이 닿는 넓이가 대략 45px 이라 그보다 크게 잡습니다.
-     40px 로 뒀더니 옆 단추를 누르게 되더군요. */
-  min-height: var(--tap);
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
+  min-height: var(--tap);   /* 48px — 화면 안의 모든 누르는 것과 같은 크기 */
+  padding: 0 13px;
+  display: inline-flex; align-items: center;
   white-space: nowrap;
-  font-size: .88rem;
-  font-weight: 700;
-  color: var(--ink-soft);
-  background: var(--card);
-  border: 1px solid var(--line);
+  font: inherit; font-size: .84rem; font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
   border-radius: 999px;
   cursor: pointer;
 }
-.pill[aria-pressed="true"] {
-  color: #1d4ed8;
-  background: var(--brand-soft);
-  border-color: var(--brand);
+/* 고른 것은 색이 아니라 '검게 채워서' 표시합니다.
+   파랗게 칠하면 '하락' 과 같은 색이 되어 헷갈립니다. */
+.chip[aria-pressed="true"] {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
-/* ── 종목 한 줄 ──────────────────────────────────────────── */
-.card {
+.count { font-size: .8rem; color: var(--ink-3); padding: 12px 2px 4px; }
+
+/* ── 종목 한 줄 ───────────────────────────────────────────── */
+/* 왼쪽은 '무슨 종목인가', 오른쪽은 '얼마인가'.
+   눈이 왼쪽에서 이름을 찾고 오른쪽에서 숫자만 훑을 수 있게 나눕니다. */
+.row {
   display: block;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  min-height: var(--tap);
+  padding: 13px 2px 0;
+  border-bottom: 1px solid var(--rule);
 }
-.card:active { background: #f2f5fa; }
-.card-top { display: flex; align-items: baseline; gap: 8px; }
-.card-name { font-weight: 700; font-size: 1rem; }
-.card-code { font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.card-tag {
-  margin-left: auto;
-  font-size: .7rem;
-  font-weight: 700;
-  color: var(--ink-soft);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 1px 7px;
-}
-.card-mid { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
-.card-price { font-size: 1.05rem; font-weight: 800; }
-.card-chg { font-size: .9rem; font-weight: 700; }
-.card-sub {
-  margin-top: 6px;
-  font-size: .8rem;
-  color: var(--ink-soft);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.card-sub b { color: var(--ink); font-weight: 700; }
+.row:active { background: var(--surface-2); }
 
-/* ── 안내 상자 ───────────────────────────────────────────── */
-.note {
-  background: var(--brand-soft);
-  border: 1px solid #b2ddff;
-  color: #175cd3;
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: .9rem;
-  margin: 10px 0;
-}
-.empty { text-align: center; color: var(--ink-soft); padding: 40px 0; font-size: .95rem; }
+.row-grid { display: flex; align-items: flex-start; gap: 12px; }
+.row-l { flex: 1; min-width: 0; }
+.row-r { flex: 0 0 auto; text-align: right; }
 
-/* ── 종목 상세 ───────────────────────────────────────────── */
+.row-line { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.row-name {
+  font-weight: 700; font-size: 1rem; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row-code { font-size: .74rem; color: var(--ink-3); flex: 0 0 auto; }
+
+.row-px  { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+.row-chg { font-size: .84rem; font-weight: 700; margin-top: 1px; }
+
+.row-sub {
+  display: flex; flex-wrap: wrap; gap: 0 12px;
+  margin-top: 3px;
+  font-size: .76rem; color: var(--ink-3);
+}
+.row-sub b { color: var(--ink-2); font-weight: 600; }
+
+.up   { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--flat); }
+
+/* ★ 이 화면의 표시 — 등락 막대 ★
+   가운데를 0 으로 두고, 오르면 오른쪽 내리면 왼쪽으로 자랍니다.
+   목록을 훑으면 그날 장 전체가 한눈에 들어옵니다. */
+.rail {
+  position: relative;
+  height: 4px;
+  margin: 10px 0 11px;
+  background:
+    linear-gradient(to right,
+      transparent calc(50% - .5px),
+      var(--rule) calc(50% - .5px),
+      var(--rule) calc(50% + .5px),
+      transparent calc(50% + .5px));
+}
+.rail i {
+  position: absolute; top: 0; height: 4px;
+  min-width: 3px; border-radius: 2px;
+}
+.rail i.up   { left: 50%;  background: var(--up-bar); }
+.rail i.down { right: 50%; background: var(--down-bar); }
+/* 상한가·하한가 딱지는 막대 끝에 붙습니다 */
+.rail .limit { position: absolute; top: -7px; }
+.rail .limit.up   { left: calc(50% + 4px); }
+.rail .limit.down { right: calc(50% + 4px); }
+
+/* 상한가·하한가는 한국 증시에만 있는 일이라 따로 표시합니다 */
+.limit {
+  font-size: .66rem; font-weight: 800;
+  padding: 1px 6px; border-radius: 4px; margin-left: 6px;
+  vertical-align: 1px;
+}
+.limit.up   { color: var(--paper); background: var(--up); }
+.limit.down { color: var(--paper); background: var(--down); }
+
+.tag {
+  font-size: .66rem; font-weight: 700; color: var(--ink-3);
+  border: 1px solid var(--rule-2); border-radius: 4px; padding: 0 5px;
+}
+
+/* ── 더 보기 / 빈 화면 ────────────────────────────────────── */
+.more {
+  width: 100%; min-height: var(--tap); margin: 14px 0 6px;
+  font: inherit; font-size: .9rem; font-weight: 600;
+  color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--rule-2); border-radius: var(--radius);
+  cursor: pointer;
+}
+.empty { padding: 56px 16px; text-align: center; color: var(--ink-3); font-size: .92rem; }
+.empty b { display: block; color: var(--ink); font-size: 1rem; margin-bottom: 6px; }
+
+/* ── 종목 상세 ────────────────────────────────────────────── */
 .back {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  font-size: .9rem;
-  font-weight: 700;
-  color: var(--ink-soft);
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 44px; font-size: .86rem; font-weight: 600; color: var(--ink-2);
 }
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 8px;
-  margin: 12px 0;
-}
-.metric {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
-  text-align: center;
-}
-.metric-l { font-size: .74rem; color: var(--ink-soft); }
-.metric-v { font-size: .95rem; font-weight: 800; margin-top: 3px; }
-.metric-v.none { color: #98a2b3; font-weight: 600; }
+.px-big { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.px-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 
-@media (min-width: 640px) {
-  .wrap { padding: 0 16px 32px; }
-  .title { font-size: 1.35rem; }
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px;
+         background: var(--rule); border: 1px solid var(--rule);
+         border-radius: var(--radius); overflow: hidden; margin: 18px 0; }
+.stat { background: var(--surface); padding: 10px 4px; text-align: center; }
+.stat-k { font-size: .68rem; color: var(--ink-3); }
+.stat-v { font-size: .82rem; font-weight: 700; margin-top: 3px; }
+.stat-v.none { color: var(--ink-3); font-weight: 500; }
+
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+         background: var(--rule); border: 1px solid var(--rule);
+         border-radius: var(--radius); overflow: hidden; margin: 16px 0; }
+.fact { background: var(--surface); padding: 12px 8px; }
+.fact-k { font-size: .7rem; color: var(--ink-3); }
+.fact-v { font-size: .95rem; font-weight: 700; margin-top: 2px; }
+.fact-v.none { color: var(--ink-3); font-weight: 500; }
+
+.note {
+  border: 1px solid var(--rule-2); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink-2);
+  padding: 14px; font-size: .88rem; margin: 12px 0;
+}
+.chart-cap { font-size: .78rem; color: var(--ink-2); margin: 8px 0 2px; }
+.chart-cap .nowrap { white-space: nowrap; }
+.foot { font-size: .74rem; color: var(--ink-3); line-height: 1.65; margin: 18px 0 8px; }
+
+@media (min-width: 600px) {
+  .head h1 { font-size: 1.2rem; }
+  .stats { grid-template-columns: repeat(5, 1fr); }
 }

@@ -13,7 +13,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { PricePoint } from "@/lib/stocks";
-import { num, signed, tone, won } from "@/lib/format";
+import { num, signed, tone } from "@/lib/format";
 
 const RANGES = [
   { label: "1개월", months: 1 },
@@ -70,7 +70,7 @@ export default function PriceChart({ data }: { data: PricePoint[] }) {
   const last = pts[pts.length - 1];
   const 변동 = first.c ? ((last.c / first.c - 1) * 100) : null;
   const 오름 = (변동 ?? 0) >= 0;
-  const color = 오름 ? "var(--up)" : "var(--down)";
+  const color = 오름 ? "var(--up-bar)" : "var(--down-bar)";
   const cur = hit === null ? null : pts[hit];
 
   /** 손가락·마우스가 짚은 x 위치에서 가장 가까운 날을 찾습니다. */
@@ -86,11 +86,11 @@ export default function PriceChart({ data }: { data: PricePoint[] }) {
 
   return (
     <>
-      <div className="pills" role="group" aria-label="차트 기간">
+      <div className="chips" role="group" aria-label="차트 기간">
         {RANGES.map((r) => (
           <button
             key={r.label}
-            className="pill"
+            className="chip"
             aria-pressed={range === r.label}
             onClick={() => {
               setRange(r.label);
@@ -102,19 +102,22 @@ export default function PriceChart({ data }: { data: PricePoint[] }) {
         ))}
       </div>
 
-      <div style={{ fontSize: ".84rem", color: "#667085", margin: "6px 0 2px" }}>
+      <div className="chart-cap">
         {cur ? (
-          <span className="tnum">
-            <b style={{ color: "var(--ink)" }}>{cur.d}</b> · {won(cur.c)}
+          <span className="n">
+            <b style={{ color: "var(--ink)" }}>{cur.d}</b> · {num(cur.c)}원
           </span>
         ) : (
-          <span className="tnum">
-            구간 변동{" "}
-            <b className={tone(변동)}>
-              {signed(변동)}
-              {변동 !== null ? "%" : ""}
-            </b>{" "}
-            · {first.d} ~ {last.d} · 거래일 {num(pts.length)}일
+          <span className="n">
+            <span className="nowrap">
+              구간 변동{" "}
+              <b className={tone(변동)}>
+                {signed(변동)}
+                {변동 !== null ? "%" : ""}
+              </b>
+            </span>{" · "}
+            <span className="nowrap">{first.d} ~ {last.d}</span>{" · "}
+            <span className="nowrap">거래일 {num(pts.length)}일</span>
           </span>
         )}
       </div>
@@ -143,20 +146,20 @@ export default function PriceChart({ data }: { data: PricePoint[] }) {
         {cur && hit !== null && (
           <>
             <line x1={geo.x(hit)} y1={PAD.t} x2={geo.x(hit)} y2={H - PAD.b}
-                  stroke="#98a2b3" strokeWidth="1" strokeDasharray="3 3" />
+                  stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3 3" />
             <circle cx={geo.x(hit)} cy={geo.y(cur.c)} r="4.5"
-                    fill="#fff" stroke={color} strokeWidth="2.5" />
+                    fill="var(--surface)" stroke={color} strokeWidth="2.5" />
           </>
         )}
       </svg>
 
-      <div className="tnum"
+      <div className="n"
            style={{ display: "flex", justifyContent: "space-between",
-                    fontSize: ".74rem", color: "#98a2b3", marginTop: -4 }}>
-        <span>{won(geo.lo)}</span>
-        <span>{won(geo.hi)}</span>
+                    fontSize: ".74rem", color: "var(--ink-3)", marginTop: -4 }}>
+        <span className="n">{num(geo.lo)}원</span>
+        <span className="n">{num(geo.hi)}원</span>
       </div>
-      <div style={{ fontSize: ".76rem", color: "#98a2b3", marginTop: 4 }}>
+      <div style={{ fontSize: ".76rem", color: "var(--ink-3)", marginTop: 4 }}>
         차트를 손가락으로 짚으면 그날 값이 나옵니다.
       </div>
     </>
