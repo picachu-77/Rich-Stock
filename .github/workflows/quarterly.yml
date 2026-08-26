@@ -46,6 +46,11 @@ on:
         required: false
         default: false
         type: boolean
+      redo:
+        description: "이미 받은 분기도 다시 받기 (평소엔 끕니다)"
+        required: false
+        default: false
+        type: boolean
       refresh_profile:
         description: "회사 업종·대표이사 정보를 전부 다시 받기 (호출 약 2,600건)"
         required: false
@@ -104,10 +109,18 @@ jobs:
             DIV_FLAG=""
           fi
 
+          REDO_FLAG=""
+          if [ "${{ github.event.inputs.redo }}" = "true" ]; then
+            REDO_FLAG="--redo"
+          fi
+
+          # 3년치는 분기가 12개라 두 시간 안에 못 끝납니다(실제로 120분
+          # 제한에 걸려 끊겼습니다). 이제 받은 분기를 건너뛰므로,
+          # 끊기면 이 버튼을 다시 누르면 남은 분기부터 이어갑니다.
           if [ "$MODE" = "years3" ]; then
-            python -m src.financial_collect --years 3 $DIV_FLAG
+            python -m src.financial_collect --years 3 $DIV_FLAG $REDO_FLAG
           else
-            python -m src.financial_collect --latest $DIV_FLAG
+            python -m src.financial_collect --latest $DIV_FLAG $REDO_FLAG
           fi
 
       # 회사 업종·대표이사·설립일을 받아옵니다.

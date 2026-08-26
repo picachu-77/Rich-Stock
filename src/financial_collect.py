@@ -93,6 +93,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="배당성향 수집을 건너뜁니다 (호출을 크게 아낍니다)",
     )
+    p.add_argument(
+        "--redo",
+        action="store_true",
+        help="이미 받은 분기도 다시 받습니다 (기본은 건너뜁니다)",
+    )
     return p.parse_args()
 
 
@@ -400,6 +405,36 @@ def main() -> None:
         periods = [latest_available_period()]
     else:
         periods = periods_for_years(args.years)
+
+    # 이미 받은 분기는 건너뜁니다.
+    #
+    # ★ 왜 필요한가 ★
+    #   3년치는 분기가 12개라 두 시간 안에 못 끝냅니다. 실제로 깃허브
+    #   작업이 120분 제한에 걸려 끊겼습니다. 그런데 다시 눌러도 첫 분기부터
+    #   다시 시작해서, 영영 3년치를 못 채우는 상태였습니다.
+    #
+    #   받은 분기를 dart_log 에 적어두는 장치는 원래 있었는데, 적기만 하고
+    #   읽지는 않았습니다. 여기서 읽어서 건너뜁니다. 이제 몇 번 나눠 누르면
+    #   3년치가 채워집니다.
+    if not args.redo:
+        with get_conn() as conn:
+            done = {
+                (r[0], r[1])
+                for r in fetch_all(
+                    conn,
+                    "SELECT fiscal_year, fiscal_quarter FROM dart_log WHERE status = 'done';",
+                )
+            }
+        skipped = [p for p in periods if p in done]
+        periods = [p for p in periods if p not in done]
+        if skipped:
+            print(f"  이미 받은 분기 {len(skipped):,}개는 건너뜁니다.")
+            print("  (다시 받으려면 --redo 를 붙이세요)")
+
+    if not periods:
+        print("\n  받을 분기가 남지 않았습니다. 이미 전부 받았습니다.")
+        print("  다시 받으려면 --redo 를 붙이세요.")
+        return
 
     print(f"  대상 분기 : {len(periods):,}개  "
           f"({periods[0][0]}년 {REPORT_NAME[periods[0][1]]} ~ "
