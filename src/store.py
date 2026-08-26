@@ -138,73 +138,133 @@ def completed_dates(conn, kind: str) -> set[date]:
 MAX_GAP_DAYS = 14
 
 
-def fill_missing_change_pct(conn) -> int:
+# 한 번에 몇 종목씩 처리할지. 200개면 한 문장이 5~10초쯤 걸립니다.
+# (Supabase 의 한 문장 제한 2분에 한참 못 미치는, 안전한 크기입니다)
+CHUNK = 200
+
+
+def _price_codes(conn) -> list[str]:
+    """
+    시세 표에 들어 있는 종목 코드를 전부 가져옵니다.
+
+    종목 목록(ticker) 표를 쓰지 않는 이유:
+      상장폐지된 종목은 목록에서 빠지지만 과거 시세는 그대로 남아 있습니다.
+      실제로 목록에는 3,931개인데 시세 표에는 4,416개가 있었습니다.
+      목록만 보고 돌리면 나머지 485개를 통째로 빠뜨리게 됩니다.
+    """
+    return [
+        r[0]
+        for r in fetch_all(conn, "SELECT DISTINCT code FROM daily_price ORDER BY code;")
+    ]
+
+
+def fill_missing_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
     """
     등락률이 비어 있는 줄을, 바로 전 거래일 종가와 비교해 직접 계산해 채웁니다.
     (ETF 는 거래소가 등락률을 안 주기 때문에 필요합니다)
 
     ★ 중요 ★
-    '바로 전 거래일' 이 7일 이상 떨어져 있으면 계산하지 않고 비워 둡니다.
+    '바로 전 거래일' 이 14일 이상 떨어져 있으면 계산하지 않고 비워 둡니다.
     데이터를 아직 다 못 받아서 중간이 비어 있을 때, 몇 달~몇 년 전 가격과
     비교한 엉뚱한 값이 '하루 등락률' 자리에 들어가는 것을 막기 위해서입니다.
     나중에 빈 날짜가 채워지면 이 함수를 다시 돌려서 정상값을 넣습니다.
+
+    ★ 왜 종목을 나눠서 처리하나요? ★
+      전에는 한 문장으로 시세 표 전체(280만 줄)를 훑었습니다. 그런데
+      Supabase 는 한 문장이 너무 오래 걸리면 중간에 끊습니다(기본 2분).
+      3년치를 다 채운 마지막 순간에 이 때문에 실패했습니다.
+
+          psycopg2.errors.QueryCanceled:
+          canceling statement due to statement timeout
+
+      계산은 종목 안에서만 이뤄지므로(앞뒤 거래일 비교), 종목을 몇백 개씩
+      나눠서 처리해도 결과가 똑같습니다. 대신 한 문장이 짧아져 끊기지
+      않고, 도중에 멈춰도 이미 채운 것은 남습니다.
     """
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            WITH calc AS (
-                SELECT code,
-                       trade_date,
-                       close,
-                       LAG(close)      OVER (PARTITION BY code ORDER BY trade_date) AS prev_close,
-                       LAG(trade_date) OVER (PARTITION BY code ORDER BY trade_date) AS prev_date
-                  FROM daily_price
+    codes = _price_codes(conn)
+    if not codes:
+        return 0
+
+    total = 0
+    for i in range(0, len(codes), batch):
+        chunk = codes[i : i + batch]
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                WITH calc AS (
+                    SELECT code,
+                           trade_date,
+                           close,
+                           LAG(close)      OVER (PARTITION BY code ORDER BY trade_date) AS prev_close,
+                           LAG(trade_date) OVER (PARTITION BY code ORDER BY trade_date) AS prev_date
+                      FROM daily_price
+                     WHERE code = ANY(%s)
+                )
+                UPDATE daily_price d
+                   SET change_pct = ROUND((c.close - c.prev_close)::numeric
+                                          / c.prev_close * 100, 4)
+                  FROM calc c
+                 WHERE d.code = c.code
+                   AND d.trade_date = c.trade_date
+                   AND d.change_pct IS NULL
+                   AND c.prev_close IS NOT NULL
+                   AND c.prev_close > 0
+                   AND c.prev_date IS NOT NULL
+                   AND (c.trade_date - c.prev_date) <= %s;
+                """,
+                (chunk, MAX_GAP_DAYS),
             )
-            UPDATE daily_price d
-               SET change_pct = ROUND((c.close - c.prev_close)::numeric
-                                      / c.prev_close * 100, 4)
-              FROM calc c
-             WHERE d.code = c.code
-               AND d.trade_date = c.trade_date
-               AND d.change_pct IS NULL
-               AND c.prev_close IS NOT NULL
-               AND c.prev_close > 0
-               AND c.prev_date IS NOT NULL
-               AND (c.trade_date - c.prev_date) <= %s;
-            """,
-            (MAX_GAP_DAYS,),
-        )
-        return cur.rowcount
+            total += cur.rowcount
+        # 조각마다 저장합니다. 도중에 멈춰도 여기까지는 남습니다.
+        conn.commit()
+        if progress:
+            progress(min(i + batch, len(codes)), len(codes), total)
+    return total
 
 
-def clear_bogus_change_pct(conn) -> int:
+def clear_bogus_change_pct(conn, batch: int = CHUNK, progress=None) -> int:
     """
     이미 잘못 채워진 등락률을 지웁니다.
-    (직전 저장일이 7일 넘게 떨어져 있는데 값이 들어가 있는 경우)
+    (직전 저장일이 14일 넘게 떨어져 있는데 값이 들어가 있는 경우)
     거래소가 직접 준 값인지 우리가 계산한 값인지 구분할 수 없으므로,
     간격이 벌어진 줄만 비우고 나중에 다시 계산되게 합니다.
+
+    fill_missing_change_pct 와 같은 이유로 종목을 나눠서 처리합니다.
+    (한 문장이 2분을 넘기면 Supabase 가 중간에 끊어버립니다)
     """
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            WITH calc AS (
-                SELECT code,
-                       trade_date,
-                       LAG(trade_date) OVER (PARTITION BY code ORDER BY trade_date) AS prev_date
-                  FROM daily_price
+    codes = _price_codes(conn)
+    if not codes:
+        return 0
+
+    total = 0
+    for i in range(0, len(codes), batch):
+        chunk = codes[i : i + batch]
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                WITH calc AS (
+                    SELECT code,
+                           trade_date,
+                           LAG(trade_date) OVER (PARTITION BY code ORDER BY trade_date) AS prev_date
+                      FROM daily_price
+                     WHERE code = ANY(%s)
+                )
+                UPDATE daily_price d
+                   SET change_pct = NULL
+                  FROM calc c
+                 WHERE d.code = c.code
+                   AND d.trade_date = c.trade_date
+                   AND d.change_pct IS NOT NULL
+                   AND c.prev_date IS NOT NULL
+                   AND (c.trade_date - c.prev_date) > %s;
+                """,
+                (chunk, MAX_GAP_DAYS),
             )
-            UPDATE daily_price d
-               SET change_pct = NULL
-              FROM calc c
-             WHERE d.code = c.code
-               AND d.trade_date = c.trade_date
-               AND d.change_pct IS NOT NULL
-               AND c.prev_date IS NOT NULL
-               AND (c.trade_date - c.prev_date) > %s;
-            """,
-            (MAX_GAP_DAYS,),
-        )
-        return cur.rowcount
+            total += cur.rowcount
+        conn.commit()
+        if progress:
+            progress(min(i + batch, len(codes)), len(codes), total)
+    return total
 
 
 # ── 현황 요약 ────────────────────────────────────────────────

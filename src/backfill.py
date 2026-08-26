@@ -161,12 +161,22 @@ def main() -> None:
                 pass
 
     # 3) 마무리 — 등락률 정리
+    #
+    # 종목을 몇백 개씩 나눠서 처리합니다. 한 문장으로 280만 줄을 한꺼번에
+    # 훑으면 Supabase 가 2분 제한에 걸려 통째로 실패합니다(실제로 겪었습니다).
+    # 나눠 두면 조각마다 저장되므로 도중에 끊겨도 다시 돌리면 이어집니다.
     print("\n  등락률 정리 중...")
+
+    def 진행(done: int, total: int, rows: int) -> None:
+        print(f"    {done:,}/{total:,}개 종목  ({rows:,}건)", flush=True)
+
     with get_conn() as conn:
         # (1) 날짜 간격이 벌어진 상태에서 잘못 계산된 값을 먼저 비웁니다
-        cleared = clear_bogus_change_pct(conn)
+        print("  (1/2) 잘못된 값 지우는 중...", flush=True)
+        cleared = clear_bogus_change_pct(conn, progress=진행)
         # (2) 비어 있는 줄을 바로 전 거래일 종가와 비교해 다시 계산합니다
-        filled = fill_missing_change_pct(conn)
+        print("  (2/2) 빈 값 계산하는 중...", flush=True)
+        filled = fill_missing_change_pct(conn, progress=진행)
         info = summary(conn)
     print(f"  잘못된 값 {cleared:,}건 제거, {filled:,}건 새로 계산 완료")
 
