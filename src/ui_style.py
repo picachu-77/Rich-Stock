@@ -98,7 +98,7 @@ _CSS = """
 
   /* ── 4. 왼쪽 사이드바 ──────────────────────────────────────── */
   [data-testid="stSidebar"] { background: var(--card-soft); }
-  [data-testid="stSidebar"] .block-container { padding-top: 1.2rem; }
+  [data-testid="stSidebarUserContent"] { padding-top: 1.2rem; }
   [data-testid="stSidebar"] [data-testid="stExpander"] {
     border: 1px solid var(--line); border-radius: 10px; background: var(--card);
     margin-bottom: .55rem; box-shadow: none;
@@ -121,37 +121,44 @@ _CSS = """
   /* ── 6. 표 ─────────────────────────────────────────────────── */
   [data-testid="stDataFrame"] { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   /* 표 안 글자를 조금 키웁니다. 숫자가 많은 화면이라 작으면 읽기 힘듭니다 */
-  [data-testid="stDataFrame"] [data-testid="stTable"] { font-size: .93rem; }
+  [data-testid="stDataFrameResizable"] { font-size: .93rem; }
 
   /* ── 7. 버튼·입력칸 ────────────────────────────────────────── */
   .stButton button, .stDownloadButton button { min-height: 42px; border-radius: 9px; font-weight: 600; }
-  [data-baseweb="input"], [data-baseweb="select"] { border-radius: 9px; }
+  [data-testid="stTextInputRootElement"], [data-testid="stSelectbox"] div[role="combobox"],
+  [data-testid="stNumberInputContainer"] { border-radius: 9px; }
 
-  /* 가로 라디오(차트 기간 등)를 알약 버튼처럼 */
+  /* 가로 라디오(차트 기간 등)를 알약 버튼처럼
+     ※ 반드시 stRadioOption 만 골라야 합니다.
+        그냥 'label' 로 두면 고르는 항목뿐 아니라 그 위의 '제목' 까지
+        알약 모양이 됩니다. 누를 수 없는 글자가 단추처럼 보여서
+        눌러보고 아무 일도 안 일어나는 일이 생깁니다. */
   [data-testid="stRadio"] [role="radiogroup"] { gap: .35rem; flex-wrap: wrap; }
-  [data-testid="stRadio"] label {
+  [data-testid="stRadioOption"] {
     border: 1px solid var(--line); background: var(--card); border-radius: 999px;
     padding: .35rem .85rem; margin: 0 !important;
     transition: background .12s, border-color .12s;
   }
-  [data-testid="stRadio"] label:hover { border-color: #94a3b8; background: var(--card-soft); }
+  [data-testid="stRadioOption"]:hover { border-color: #94a3b8; background: var(--card-soft); }
 
   /* ★ 고른 알약을 파랗게 채워 한눈에 보이게 합니다 ★
      기본 상태로는 작은 동그라미 하나만 달라져서, 무엇을 골랐는지 알아보기 어렵습니다. */
-  [data-testid="stRadio"] label:has(input:checked) {
+  [data-testid="stRadioOption"]:has(input:checked) {
     background: #eff6ff; border-color: var(--brand);
   }
-  [data-testid="stRadio"] label:has(input:checked) p {
+  [data-testid="stRadioOption"]:has(input:checked) p {
     color: #1d4ed8 !important; font-weight: 700 !important;
   }
 
   /* 탭(목록 / 차트 / 재무)을 크고 또렷하게 */
-  [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: .25rem; border-bottom: 2px solid var(--line); }
-  [data-testid="stTabs"] [data-baseweb="tab"] {
+  [data-testid="stTabs"] div:has(> [data-testid="stTab"]) {
+    gap: .25rem; border-bottom: 2px solid var(--line);
+  }
+  [data-testid="stTab"] {
     font-weight: 700; font-size: 1rem; padding: .6rem 1rem;
   }
   /* 지금 보고 있는 탭을 진하게 (기본값은 밑줄만 있어 눈에 잘 안 띕니다) */
-  [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {
+  [data-testid="stTab"][aria-selected="true"] p {
     color: var(--brand) !important;
   }
 
@@ -325,9 +332,9 @@ _CSS = """
   /* ── 8-6. 키보드로 옮겨 다닐 때 지금 위치 표시 ──────────────── */
   /* 마우스 없이 Tab 키로 조작하는 분을 위해, 지금 선택된 곳을 또렷하게 */
   .stButton button:focus-visible,
-  [data-baseweb="input"] input:focus-visible,
-  [data-testid="stRadio"] label:has(input:focus-visible),
-  [data-testid="stTabs"] [data-baseweb="tab"]:focus-visible {
+  [data-testid="stTextInput"] input:focus-visible,
+  [data-testid="stRadioOption"]:has(input:focus-visible),
+  [data-testid="stTab"]:focus-visible {
     outline: 3px solid #93c5fd !important;
     outline-offset: 2px !important;
   }
@@ -359,8 +366,7 @@ _CSS = """
 
     /* 가로로 늘어선 칸을 2개씩 줄바꿈 (마지막 칸이 혼자 넓어지지 않도록 고정) */
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .5rem !important; }
-    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
-    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
       flex: 0 1 calc(50% - .25rem) !important;
       min-width: calc(50% - .25rem) !important;
       width: calc(50% - .25rem) !important;
@@ -370,19 +376,107 @@ _CSS = """
     [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
     [data-testid="stMetricLabel"] p { font-size: .78rem !important; }
 
-    /* 탭을 손가락으로 누르기 쉽게, 좁으면 가로 스크롤 */
-    [data-testid="stTabs"] [data-baseweb="tab-list"] {
-      overflow-x: auto; scrollbar-width: none;
+    /* ── 탭: 옆으로 밀지 않고 두 줄로 접어서 모두 보이게 ──────
+       전에는 한 줄에 억지로 밀어 넣고 넘치면 옆으로 밀어 보게 했습니다.
+       그런데 화면이 364px 인데 탭은 433px 이라 마지막 탭(🧭 방향)이
+       늘 화면 밖에 있었습니다. 있는 줄도 모르고 지나치게 됩니다.
+       줄바꿈을 허용하면 두 줄이 되지만 다섯 개가 모두 보입니다.
+       세로로 46px 을 더 쓰는 대신, 숨는 탭이 없어집니다.               */
+    [data-testid="stTabs"] div:has(> [data-testid="stTab"]) {
+      flex-wrap: wrap !important;
+      overflow-x: visible !important;
+      gap: .15rem .1rem !important;
     }
-    [data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
-    /* 탭 4개가 한 줄에 들어가도록 좌우 여백과 글자를 줄입니다.
-       그래도 넘치면 옆으로 밀어서 볼 수 있습니다. */
-    [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0 !important; }
-    [data-testid="stTabs"] [data-baseweb="tab"] {
-      padding: .5rem .3rem; font-size: .82rem; white-space: nowrap;
+    /* 옆으로 미는 화살표는 이제 필요 없습니다 */
+    [data-testid="stTabsScrollRight"], [data-testid="stTabsScrollLeft"] { display: none !important; }
+
+    /* 손가락으로 누르기 좋게 세로 46px 을 확보합니다.
+       (애플 권장 44px · 안드로이드 권장 48dp) */
+    [data-testid="stTab"] {
+      min-height: 46px; padding: .45rem .55rem; font-size: .88rem;
+      white-space: nowrap;
     }
-    /* 탭 안의 그림문자를 조금 줄여 자리를 아낍니다 */
-    [data-testid="stTabs"] [data-baseweb="tab"] p { letter-spacing: -.3px; }
+    [data-testid="stTab"] p { letter-spacing: -.3px; }
+
+    /* ── 누르는 것은 모두 손가락 크기로 ────────────────────────
+       재보니 화면의 누르는 것 대부분이 27~40px 이었습니다.
+       손끝이 닿는 넓이가 대략 45px 이라, 그보다 작으면 옆을 누르게
+       됩니다. 아래에서 한 번에 키웁니다.                              */
+    .stButton button, .stDownloadButton button,
+    .stFormSubmitButton button { min-height: 48px !important; }
+
+    /* 글자·숫자 입력칸 */
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInputField"] { min-height: 48px !important; font-size: 1rem !important; }
+    [data-testid="stTextArea"] textarea { font-size: 1rem !important; }
+
+    /* 숫자 입력의 −/+ 단추 : 32×38 → 48×48 (제일 많이 누르는 곳입니다) */
+    [data-testid="stNumberInputStepUp"],
+    [data-testid="stNumberInputStepDown"] {
+      min-width: 48px !important; min-height: 48px !important;
+    }
+
+    /* 고르는 칸(드롭다운) */
+    [data-testid="stSelectbox"] div[role="combobox"],
+    [data-testid="stMultiSelect"] div[role="combobox"] { min-height: 48px !important; }
+    [data-testid="stSelectbox"] input { min-height: 46px !important; font-size: 1rem !important; }
+
+    /* 알약 모양 라디오 (높은 순 / 낮은 순 등) : 40 → 46 */
+    [data-testid="stRadioOption"] { min-height: 46px !important; }
+
+    /* 왼쪽 메뉴의 화면 이름들 : 27 → 46
+       이게 화면을 옮겨 다니는 유일한 길인데 가장 작았습니다. */
+    [data-testid="stSidebarNavLink"] {
+      min-height: 46px !important; padding: .55rem .6rem !important;
+    }
+    [data-testid="stSidebarNavLink"] span { font-size: 1rem !important; }
+
+    /* 표 위의 작은 도구 단추(내려받기·검색·전체화면) : 22 → 40 */
+    [data-testid="stElementToolbarButton"] { min-height: 40px !important; min-width: 40px !important; }
+
+    /* 제목 옆 '링크 걸기' 표시는 16px 이라 누를 수도 없고, 휴대폰에서는
+       주소를 복사할 일도 없습니다. 헛눌림만 만들어서 감춥니다. */
+    [data-testid="stHeaderActionElements"] { display: none !important; }
+
+    /* ── 왼쪽 필터 안의 잔손질 ─────────────────────────────────
+       재보니 필터 쪽에 제일 작은 것들이 몰려 있었습니다. 필터야말로
+       휴대폰에서 가장 많이 만지는 곳인데 그랬습니다.                  */
+
+    /* 고른 항목(코스피·코스닥…)을 지우는 X : 15×7 → 24×24
+       7px 은 손톱으로도 못 누르는 크기입니다. */
+    [data-testid="stMultiSelectTagsContainer"] span[data-baseweb="tag"],
+    [data-testid="stMultiSelectTagsContainer"] > span {
+      min-height: 34px !important;
+    }
+    [data-testid="stMultiSelectTagsContainer"] button {
+      min-width: 24px !important; min-height: 24px !important;
+    }
+    [data-testid="stMultiSelect"] div[data-baseweb="select"] > div { min-height: 48px !important; }
+
+    /* 드롭다운 열기 / 모두 지우기 단추 : 22~24 → 40 */
+    [data-testid="stMultiSelect"] button[aria-label="Open"],
+    [data-testid="stMultiSelect"] button[aria-label="Clear all"],
+    [data-testid="stSelectbox"] button[aria-label="Open"] {
+      min-width: 40px !important; min-height: 40px !important;
+    }
+
+    /* 범위 슬라이더(주가·등락률·수익률) 손잡이를 키웁니다.
+       기본 16px 은 손가락으로 집기가 어렵습니다. */
+    [data-testid="stSlider"] input[type="range"] { height: 30px !important; }
+    [data-testid="stSlider"] input[type="range"]::-webkit-slider-thumb {
+      width: 28px !important; height: 28px !important;
+    }
+    [data-testid="stSlider"] input[type="range"]::-moz-range-thumb {
+      width: 28px !important; height: 28px !important;
+    }
+
+    /* 물음표 도움말 : 16 → 30
+       라벨 옆에 붙는 것이라 44px 까지 키우면 글자를 밀어냅니다.
+       30px 이면 손가락으로 누를 수 있으면서 줄도 흐트러지지 않습니다. */
+    [data-testid="stTooltipHoverTarget"] {
+      min-width: 30px !important; min-height: 30px !important;
+    }
+    [data-testid="stTooltipHoverTarget"] svg { width: 20px !important; height: 20px !important; }
 
     /* 접이식 카드 제목이 3줄씩 길어지지 않게 2줄로 제한 */
     [data-testid="stAppViewContainer"] [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p {
@@ -450,7 +544,7 @@ _SIDEBAR_BTN = """
   btn.style.cssText = [
     'position:fixed', 'right:12px',
     'top:calc(6px + env(safe-area-inset-top, 0px))',
-    'z-index:2147483000', 'padding:.5rem .95rem', 'border-radius:999px',
+    'z-index:2147483000', 'padding:.6rem 1rem', 'min-height:44px', 'border-radius:999px',
     'border:0', 'background:#2563eb', 'color:#fff', 'font-weight:700',
     'font-size:13.5px', 'box-shadow:0 4px 14px rgba(15,23,42,.35)', 'cursor:pointer',
     'display:none', 'opacity:1',

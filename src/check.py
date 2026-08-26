@@ -6,7 +6,7 @@
 
 확인하는 것 5가지
   1) .env 파일이 있고 값이 채워져 있는가
-  2) Neon 데이터베이스에 접속이 되는가
+  2) 데이터베이스에 접속이 되는가
   3) 표(테이블)가 만들어져 있는가
   4) 한국거래소 로그인이 되는가       ← 시세용
   5) DART 인증키가 동작하는가          ← 재무지표용 (선택)
@@ -46,7 +46,7 @@ def check_env_file() -> bool:
 
 
 def check_database() -> bool:
-    print("\n[2/5] Neon 데이터베이스 접속 확인")
+    print("\n[2/5] 데이터베이스 접속 확인")
     try:
         from .config import get_database_url
 
@@ -72,9 +72,9 @@ def check_database() -> bool:
     except Exception as exc:  # noqa: BLE001
         print(f"{NG} 접속 실패: {exc}")
         print("       확인할 점:")
-        print("         - Neon 대시보드에서 연결 문자열을 다시 복사했는지")
+        print("         - 데이터베이스 대시보드에서 연결 문자열을 다시 복사했는지")
         print("         - 문자열이 한 줄로 붙어 있는지 (줄바꿈이 들어가면 안 됩니다)")
-        print("         - Neon 프로젝트가 잠자기 상태면 잠시 후 다시 시도")
+        print("         - 프로젝트가 잠자기 상태면 잠시 후 다시 시도 (무료 플랜)")
         return False
 
 

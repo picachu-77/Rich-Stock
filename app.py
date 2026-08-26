@@ -360,6 +360,15 @@ with st.sidebar:
             key="f_price",
             help="양쪽 끝에 두면 제한 없음",
         )
+        # 손잡이 옆 숫자는 Streamlit 이 '1000000' 처럼 자릿수 구분 없이 그립니다
+        # (표시 형식을 바꾸는 방법을 제공하지 않습니다). 몇 원인지 세어야 해서
+        # 아래에 읽기 쉬운 형태로 다시 적어줍니다.
+        # 휴대폰에서는 손잡이를 1px 만 움직여도 5,000원씩 뛰기 때문에,
+        # 지금 어디에 놓였는지 숫자로 확인할 수 있어야 합니다.
+        if (price_min, price_max) == (0, 1_000_000):
+            st.caption("주가 제한 없음 (양쪽 끝)")
+        else:
+            st.caption(f"**{price_min:,}원 ~ {price_max:,}원**")
         min_cap = st.number_input(
             "최소 시가총액 (억원)",
             min_value=0, value=0, step=100, key="f_cap",

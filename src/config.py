@@ -1,7 +1,8 @@
 """
 설정 담당 파일.
 
-하는 일: Neon 데이터베이스 연결 문자열(비밀 정보)을 안전한 곳에서 읽어옵니다.
+하는 일: 데이터베이스 연결 문자열(비밀 정보)을 안전한 곳에서 읽어옵니다.
+        Neon · Supabase 등 어떤 Postgres 든 연결 문자열만 바꾸면 됩니다.
 읽는 순서는 아래와 같고, 먼저 찾은 값을 씁니다.
 
   1) 컴퓨터의 환경변수  (GitHub Actions 가 자동 실행할 때 이 방법을 씁니다)
@@ -33,7 +34,7 @@ _HELP = """
            copy .env.example .env
     2) .env 파일을 메모장으로 열어서
            DATABASE_URL=postgresql://...
-       형태로 Neon 연결 문자열을 붙여넣고 저장하세요.
+       형태로 연결 문자열을 붙여넣고 저장하세요.
        (따옴표 없이, 한 줄로, = 앞뒤 공백 없이)
 
   GitHub Actions 에서 실행 중이라면:
@@ -43,7 +44,7 @@ _HELP = """
 
 
 def get_database_url() -> str:
-    """Neon 연결 문자열을 돌려줍니다. 없으면 친절한 안내와 함께 멈춥니다."""
+    """데이터베이스 연결 문자열을 돌려줍니다. 없으면 친절한 안내와 함께 멈춥니다."""
     url = (os.getenv("DATABASE_URL") or "").strip()
 
     # Streamlit Cloud 에서 실행되는 경우 secrets 에서도 찾아봅니다.
@@ -68,14 +69,14 @@ def get_database_url() -> str:
     if "myuser:mypassword" in url or "ep-cool-name-123456" in url:
         raise RuntimeError(
             "[!] .env 의 DATABASE_URL 이 아직 견본(예시) 값 그대로입니다.\n"
-            "    Neon 대시보드 > 내 프로젝트 > Connection string 에서\n"
+            "    데이터베이스 대시보드에서 연결 문자열(Connection string)을 찾아\n"
             "    실제 연결 문자열을 복사해 붙여넣어 주세요."
         )
 
     if not url.startswith(("postgresql://", "postgres://")):
         raise RuntimeError(
             "[!] DATABASE_URL 값이 postgresql:// 로 시작하지 않습니다.\n"
-            "    Neon 대시보드에서 복사한 문자열 전체를 그대로 붙여넣었는지 확인하세요.\n"
+            "    대시보드에서 복사한 문자열 전체를 그대로 붙여넣었는지 확인하세요.\n"
             f"    현재 값의 앞부분: {url[:30]}..."
         )
 
