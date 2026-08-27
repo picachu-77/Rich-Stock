@@ -3,9 +3,13 @@ import { notFound } from "next/navigation";
 import PriceChart from "@/components/PriceChart";
 import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
+import Fact from "@/components/Fact";
+import Readout from "@/components/Readout";
 import { getHistory, getStock } from "@/lib/stocks";
 import { getStockNews, newsReady } from "@/lib/news";
 import { getStockDisclosures } from "@/lib/disclosures";
+import * as 설명 from "@/lib/explain";
+import { readout } from "@/lib/readout";
 import { PERIODS } from "@/lib/periods";
 import { eok, limitHit, num, railWidth, signed, tone } from "@/lib/format";
 
@@ -81,15 +85,67 @@ export default async function StockPage({
           })}
         </div>
 
+        {/* 수익률도 설명이 필요합니다. '지난 수익률은 앞으로를
+            알려주지 않는다' 는 것이 초보자가 가장 크게 다치는 지점입니다. */}
+        <details className="hint">
+          <summary>수익률이 무슨 뜻인가요?</summary>
+          <div className="hint-x">
+            <p>{설명.수익률().뜻}</p>
+            <p>{설명.수익률().지금}</p>
+            <p className="hint-care">
+              <b>지난 수익률은 앞으로를 알려주지 않습니다.</b> 많이 오른 종목을
+              보면 &lsquo;더 오르겠다&rsquo; 싶고 많이 내린 종목을 보면
+              &lsquo;이제 오르겠다&rsquo; 싶어지는데, 둘 다 근거가 없습니다.
+              왜 올랐는지·내렸는지를 봐야 합니다.
+            </p>
+          </div>
+        </details>
+
         <PriceChart data={history} />
 
+        {/* 숫자를 보기 전에 먼저 읽어줍니다. 초보자는 숫자를 봐도
+            무엇이 이상한지 모르기 때문에 순서가 중요합니다. */}
+        <div className="sec-h">
+          <h2>이 회사 읽어주기</h2>
+          <span>숫자에서 눈에 띄는 것</span>
+        </div>
+        <Readout notes={readout(stock, disclosures)} />
+
+        <div className="sec-h">
+          <h2>숫자</h2>
+          <span>눌러보세요</span>
+        </div>
         <div className="facts">
-          <Fact k="시가총액" v={eok(stock.market_cap)} />
-          <Fact k="PER" v={stock.per && stock.per > 0 ? num(stock.per, 2) : ""} />
-          <Fact k="PBR" v={stock.pbr ? num(stock.pbr, 2) : ""} />
-          <Fact k="배당수익률" v={stock.div_yield ? `${num(stock.div_yield, 2)}%` : ""} />
-          <Fact k="ROE" v={stock.roe !== null ? `${num(stock.roe, 2)}%` : ""} />
-          <Fact k="부채비율" v={stock.debt_ratio !== null ? `${num(stock.debt_ratio, 0)}%` : ""} />
+          <Fact
+            label="시가총액"
+            value={eok(stock.market_cap)}
+            explain={설명.시가총액(stock.market_cap)}
+          />
+          <Fact
+            label="PER"
+            value={stock.per && stock.per > 0 ? num(stock.per, 2) : ""}
+            explain={설명.PER(stock.per, stock.kind)}
+          />
+          <Fact
+            label="PBR"
+            value={stock.pbr ? num(stock.pbr, 2) : ""}
+            explain={설명.PBR(stock.pbr, stock.kind)}
+          />
+          <Fact
+            label="배당수익률"
+            value={stock.div_yield ? `${num(stock.div_yield, 2)}%` : ""}
+            explain={설명.배당수익률(stock.div_yield)}
+          />
+          <Fact
+            label="ROE"
+            value={stock.roe !== null ? `${num(stock.roe, 2)}%` : ""}
+            explain={설명.ROE(stock.roe, stock.kind)}
+          />
+          <Fact
+            label="부채비율"
+            value={stock.debt_ratio !== null ? `${num(stock.debt_ratio, 0)}%` : ""}
+            explain={설명.부채비율(stock.debt_ratio, stock.kind)}
+          />
         </div>
 
         {/* 공시가 먼저입니다. 회사가 직접 신고한 사실이라 기사보다
@@ -123,16 +179,6 @@ export default async function StockPage({
           &lsquo;아직 자료가 없다&rsquo;는 뜻입니다.
         </p>
       </main>
-    </div>
-  );
-}
-
-/** 값이 없으면 '—'. 빈칸보다 '없다'는 것이 분명해 보입니다. */
-function Fact({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="fact">
-      <div className="fact-k">{k}</div>
-      {v ? <div className="fact-v n">{v}</div> : <div className="fact-v none">—</div>}
     </div>
   );
 }
