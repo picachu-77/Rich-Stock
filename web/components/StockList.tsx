@@ -24,7 +24,20 @@ const PAGE = 30;
 export default function StockList({ stocks }: { stocks: ListStock[] }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("시가총액");
+  const [sector, setSector] = useState("");   // "" = 업종 안 가림
+  const [kind, setKind] = useState("");       // "" | "주식" | "ETF"
   const [shown, setShown] = useState(PAGE);
+
+  /** 고를 수 있는 업종과 그 개수. 많은 업종부터 위로. */
+  const sectors = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const s of stocks) if (s.sector) n.set(s.sector, (n.get(s.sector) ?? 0) + 1);
+    return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
+  }, [stocks]);
+
+  /** 거르기를 하나라도 걸었는가 */
+  const 거른중 = sector !== "" || kind !== "";
+  const 초기화 = () => { setSector(""); setKind(""); setShown(PAGE); };
 
   // 초성은 한 번만 계산해 둡니다 (칠 때마다 다시 만들면 느려집니다)
   const chosung = useMemo(() => {
@@ -36,8 +49,15 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
   const view = useMemo(() => {
     const query = q.trim();
 
+    // 업종·종류로 먼저 좁히고, 그다음에 찾거나 줄 세웁니다.
+    const 후보 = stocks.filter(
+      (s) =>
+        (sector === "" || s.sector === sector) &&
+        (kind === "" || (kind === "ETF" ? s.kind === "ETF" : s.kind !== "ETF")),
+    );
+
     if (query) {
-      return stocks
+      return 후보
         .map((s) => ({ s, sc: scoreOf(query, s.name, s.code, chosung.get(s.code)) }))
         .filter((x) => x.sc > 0)
         .sort((a, b) => b.sc - a.sc || (b.s.market_cap ?? -1) - (a.s.market_cap ?? -1))
@@ -46,7 +66,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
 
     // 값이 없는 종목은 늘 뒤로. 빈칸이 1등에 오면 이상합니다.
     const by = (get: (s: ListStock) => number | null, asc = false) =>
-      [...stocks].sort((a, b) => {
+      [...후보].sort((a, b) => {
         const x = get(a);
         const y = get(b);
         if (x === null && y === null) return 0;
@@ -64,7 +84,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
       case "배당 높은":   return by((s) => (s.div_yield ? s.div_yield : null));
       default:            return by((s) => s.market_cap);
     }
-  }, [stocks, q, sort, chosung]);
+  }, [stocks, q, sort, sector, kind, chosung]);
 
   const list = view.slice(0, shown);
   const searching = q.trim().length > 0;
@@ -90,6 +110,34 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
         </div>
 
         {!searching && (
+          <div className="picks">
+            <select
+              className="pick"
+              value={sector}
+              onChange={(e) => { setSector(e.target.value); setShown(PAGE); }}
+              aria-label="업종으로 좁히기"
+            >
+              <option value="">업종 전체</option>
+              {sectors.map(([name, n]) => (
+                <option key={name} value={name}>
+                  {name} ({n.toLocaleString("ko-KR")})
+                </option>
+              ))}
+            </select>
+            <select
+              className="pick"
+              value={kind}
+              onChange={(e) => { setKind(e.target.value); setShown(PAGE); }}
+              aria-label="종류로 좁히기"
+            >
+              <option value="">주식·ETF 전부</option>
+              <option value="주식">주식만</option>
+              <option value="ETF">ETF만</option>
+            </select>
+          </div>
+        )}
+
+        {!searching && (
           <div className="chips" role="group" aria-label="정렬 기준">
             {SORTS.map((s) => (
               <button key={s} className="chip" aria-pressed={sort === s}
@@ -105,9 +153,30 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
         {searching
           ? `'${q.trim()}' 로 ${num(view.length)}개를 찾았습니다`
           : `${num(view.length)}개 종목 · ${sort} 순`}
+        {!searching && 거른중 && (
+          <>
+            {" · "}
+            <b>{[sector, kind && (kind === "ETF" ? "ETF만" : "주식만")].filter(Boolean).join(" · ")}</b>
+            {" "}
+            <button className="count-x" onClick={초기화}>
+              지우기
+            </button>
+          </>
+        )}
       </p>
 
-      {view.length === 0 && (
+      {view.length === 0 && !searching && 거른중 && (
+        <div className="empty">
+          <b>고르신 조건에 맞는 종목이 없습니다</b>
+          업종과 종류를 함께 좁히면 남는 게 없을 수 있습니다.
+          <br />
+          <button className="more" style={{ marginTop: 12 }} onClick={초기화}>
+            조건 지우기
+          </button>
+        </div>
+      )}
+
+      {view.length === 0 && searching && (
         <div className="empty">
           <b>찾은 종목이 없습니다</b>
           이름 일부나 여섯 자리 코드로 찾아보세요.
@@ -129,6 +198,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
                   {s.kind === "ETF" && <span className="tag">ETF</span>}
                 </div>
                 <div className="row-sub">
+                  {!sector && s.sector && <span>{s.sector}</span>}
                   {s.market_cap !== null && <span>시총 <b className="n">{eok(s.market_cap)}</b></span>}
                   {s.ret1y !== null && (
                     <span>1년 <b className={`n ${tone(s.ret1y)}`}>{signed(s.ret1y, 1)}%</b></span>

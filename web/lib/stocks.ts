@@ -7,6 +7,7 @@
  */
 import { sql } from "./db";
 import { NEAR_DAYS, PERIODS } from "./periods";
+import { sectorName } from "./ksic";
 
 /**
  * 목록 화면에 필요한 것만 담은 가벼운 모양.
@@ -26,6 +27,8 @@ export type ListStock = {
   name: string;
   market: string;
   kind: string;
+  /** 업종 이름. ETF 는 회사가 아니라 업종이 없어 null 입니다. */
+  sector: string | null;
   close: number | null;
   change_pct: number | null;
   market_cap: number | null;
@@ -94,6 +97,7 @@ export async function getStocks(): Promise<ListStock[]> {
   const rows = await sql.unsafe(`
     WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price)
     SELECT t.code, t.name, t.market, t.kind,
+           t.sector_code,
            c.trade_date, c.close, c.change_pct, c.market_cap,
            c.per, c.div_yield,
            r0.close AS past0, r1.close AS past1
@@ -128,6 +132,9 @@ export async function getStocks(): Promise<ListStock[]> {
       change_pct: toNum(r.change_pct),
       // 원 단위로 들어 있어 억원으로 바꿉니다.
       market_cap: cap === null ? null : Math.round(cap / 1e8),
+      // 업종 이름은 서버에서 만들어 보냅니다. 코드를 보내고 브라우저에서
+      // 바꾸면 업종 대응표(4KB)를 휴대폰이 함께 받아야 합니다.
+      sector: r.kind === "ETF" ? null : sectorName((r.sector_code as string) ?? null),
       per: toNum(r.per),
       div_yield: toNum(r.div_yield),
       ret1m: pct(close, toNum(r.past0)),
