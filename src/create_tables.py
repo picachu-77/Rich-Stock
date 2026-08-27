@@ -179,6 +179,11 @@ CREATE TABLE IF NOT EXISTS dart_log (
 --    그래야 기록과 잔고가 어긋날 일이 없습니다.
 CREATE TABLE IF NOT EXISTS paper_trade (
     id           BIGSERIAL PRIMARY KEY,
+    -- 누구의 연습인지.
+    --   Streamlit(내 컴퓨터)과 휴대폰 화면이 같은 계좌를 쓰도록 'me' 하나로
+    --   둡니다. 나중에 여러 사람이 쓸 일이 생기면 이 칸만 나누면 됩니다.
+    --   기본값을 둔 덕에 기존 코드는 이 칸을 몰라도 그대로 돕니다.
+    owner        TEXT        NOT NULL DEFAULT 'me',
     trade_date   DATE        NOT NULL,          -- 사고판 날
     code         TEXT        NOT NULL,          -- 종목코드
     side         TEXT        NOT NULL,          -- BUY(샀다) / SELL(팔았다)
@@ -210,6 +215,7 @@ CREATE INDEX IF NOT EXISTS idx_paper_trade_date ON paper_trade (trade_date DESC)
 --    amount 가 양수면 넣은 것, 음수면 뺀 것입니다.
 CREATE TABLE IF NOT EXISTS paper_cash (
     id         BIGSERIAL PRIMARY KEY,
+    owner      TEXT        NOT NULL DEFAULT 'me',
     cash_date  DATE        NOT NULL,
     amount     NUMERIC(18, 2) NOT NULL,   -- +입금 / -출금
     memo       TEXT,
@@ -217,6 +223,12 @@ CREATE TABLE IF NOT EXISTS paper_cash (
 );
 
 CREATE INDEX IF NOT EXISTS idx_paper_cash_date ON paper_cash (cash_date DESC);
+
+-- 이미 만들어진 표에는 CREATE TABLE 이 아무 일도 하지 않으므로 따로 더합니다.
+ALTER TABLE paper_trade ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT 'me';
+ALTER TABLE paper_cash  ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT 'me';
+CREATE INDEX IF NOT EXISTS idx_paper_trade_owner ON paper_trade (owner, trade_date, id);
+CREATE INDEX IF NOT EXISTS idx_paper_cash_owner  ON paper_cash  (owner, cash_date);
 
 -- ─────────────────────────────────────────────────────────────
 -- 9) 공시 목록 — '회사가 지금 무엇을 하고 있는지'

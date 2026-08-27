@@ -1,3 +1,4 @@
+import Link from "next/link";
 import StockList from "@/components/StockList";
 import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
@@ -53,6 +54,13 @@ export default async function Home() {
       </header>
 
       <main>
+        {/* 연습으로 가는 길. 목록 위에 둡니다 — 아래에 두면 3,900줄 뒤라
+            아무도 닿지 못합니다. */}
+        <Link href="/practice" className="go-practice">
+          <b>모의투자</b>
+          <span>진짜 돈 없이 사고파는 연습 — 왜 샀는지 적어두고 되돌아보기</span>
+        </Link>
+
         {/* 무슨 일이 있었는지 먼저 읽고 종목을 봅니다.
             목록은 3,900줄이라 아래에 두면 아무도 닿지 못합니다. */}
         <div className="sec-h" style={{ marginTop: 4 }}>

@@ -473,6 +473,92 @@ a { color: inherit; text-decoration: none; }
 }
 .news-none-sub { font-size: .76rem; color: var(--ink-3); }
 
+/* 첫 화면에서 연습으로 가는 길 */
+.go-practice {
+  display: block; margin: 4px 0 18px; padding: 13px 15px;
+  min-height: var(--tap);
+  border: 1px solid var(--rule-2); border-radius: var(--radius);
+  background: var(--surface); color: inherit; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.go-practice:active { background: var(--surface-2); }
+@media (hover: hover) { .go-practice:hover { background: var(--surface-2); } }
+.go-practice:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.go-practice b { display: block; font-size: .95rem; }
+.go-practice span { display: block; margin-top: 3px; font-size: .76rem; color: var(--ink-3); line-height: 1.5; }
+
+/* ── 모의투자 입력칸 ──────────────────────────────────────── */
+.pf { margin: 12px 0 0; }
+.pf-l { display: block; font-size: .78rem; color: var(--ink-3); margin: 14px 0 0; }
+.pf-l:first-child { margin-top: 0; }
+.pf-opt { color: var(--ink-3); }
+.pf select, .pf input {
+  display: block; width: 100%; margin-top: 5px;
+  min-height: var(--tap);            /* 손끝이 닿는 넓이 */
+  padding: 10px 12px;
+  font-size: 16px;                   /* 16px 미만이면 아이폰이 화면을 확대합니다 */
+  font-family: inherit; color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule-2); border-radius: 10px;
+  -webkit-appearance: none; appearance: none;
+}
+.pf input[type="number"] { font-family: var(--mono, inherit); }
+.pf select {
+  /* 고르는 칸이라는 표시(꺾쇠). 배경 이미지 하나로 그립니다. */
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+.pf select:focus, .pf input:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+
+.pf-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pf-sum {
+  margin: 12px 0 0; padding: 10px 12px;
+  background: var(--surface-2); border-radius: 10px;
+  font-size: .84rem; line-height: 1.6;
+}
+.pf-dim { color: var(--ink-3); font-size: .78rem; }
+.pf-note {
+  margin: 12px 0 0; font-size: .78rem; line-height: 1.65; color: var(--ink-3);
+}
+.pf-vow {
+  margin: 12px 0 0; padding: 9px 12px; font-size: .82rem;
+  border: 1px solid var(--rule-2); border-radius: 10px; color: var(--ink-2);
+}
+
+.btn {
+  display: block; width: 100%; margin-top: 16px;
+  min-height: var(--tap); padding: 12px;
+  font-size: .95rem; font-weight: 700; font-family: inherit;
+  color: var(--paper); background: var(--ink);
+  border: none; border-radius: 12px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:disabled { opacity: .55; }
+.btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.btn.ghost {
+  color: var(--ink-3); background: none; border: 1px solid var(--rule-2);
+  font-weight: 500; font-size: .82rem; min-height: var(--tap); margin-top: 22px;
+}
+
+.msg { margin: 12px 0 0; padding: 11px 13px; border-radius: 10px;
+       font-size: .84rem; line-height: 1.6; }
+.msg.ok  { background: var(--surface-2); color: var(--ink); }
+.msg.bad { border: 1px solid var(--up); color: var(--up); }
+
+/* 살 때 한 약속에 닿았을 때 */
+.vow { margin: 8px 0 0; font-size: .8rem; line-height: 1.55;
+       padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
+.vow.hit  { color: var(--up); }
+.vow.stop { color: var(--down); }
+
+/* 복기 — 살 때와 팔 때를 나란히 */
+.rv { margin: 8px 0 0; font-size: .78rem; line-height: 1.7; color: var(--ink-3); }
+.rv b { display: inline-block; min-width: 38px; color: var(--ink-2); }
+
 @media (min-width: 600px) {
   .head h1 { font-size: 1.2rem; }
   .stats { grid-template-columns: repeat(5, 1fr); }
