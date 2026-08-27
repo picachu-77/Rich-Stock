@@ -4,15 +4,20 @@ import { allowed, gateReady } from "@/lib/gate";
 import {
   BUY_REASONS,
   SELL_REASONS,
+  assetCurve,
   cashLeft,
+  getCashMoves,
   getDeposits,
   getTrades,
   holdings,
+  timeline,
   unpackReason,
   walk,
 } from "@/lib/paper";
 import { num, signed, tone } from "@/lib/format";
 import { BuyForm, SellForm, CashForm, GateForm } from "@/components/PracticeForms";
+import AssetChart from "@/components/AssetChart";
+import Timeline from "@/components/Timeline";
 import { 사기, 팔기, 돈넣기, 열기, 잠그기 } from "./actions";
 
 /**
@@ -55,7 +60,11 @@ export default async function PracticePage() {
   }
 
   /* ── 자료 모으기 ── */
-  const [trades, deposits] = await Promise.all([getTrades(), getDeposits()]);
+  const [trades, deposits, moves] = await Promise.all([
+    getTrades(),
+    getDeposits(),
+    getCashMoves(),
+  ]);
 
   // 지금 값을 붙이려면 최근 시세가 필요합니다.
   const priceRows = await sql<{ code: string; name: string; close: string | number }[]>`
@@ -73,6 +82,28 @@ export default async function PracticePage() {
   `;
   const priceOf = new Map(priceRows.map((r) => [r.code, Number(r.close)]));
   const nameOf = new Map(priceRows.map((r) => [r.code, r.name]));
+
+  /* 자산 흐름을 그리려면 '그날 그 종목이 얼마였는지' 가 필요합니다.
+     한 번이라도 손댄 종목만, 첫 거래일 이후만 가져옵니다. */
+  const codes = [...new Set(trades.map((t) => t.code))];
+  const firstDay = trades.length ? trades[0].date : null;
+  const priceAt = new Map<string, Map<string, number>>();
+  if (codes.length && firstDay) {
+    const hist = await sql<{ code: string; trade_date: Date | string; close: string | number }[]>`
+      SELECT code, trade_date, close
+        FROM daily_price
+       WHERE code = ANY(${codes}) AND trade_date >= ${firstDay}::date
+       ORDER BY code, trade_date
+    `;
+    for (const r of hist) {
+      const d =
+        r.trade_date instanceof Date
+          ? r.trade_date.toISOString().slice(0, 10)
+          : String(r.trade_date).slice(0, 10);
+      if (!priceAt.has(r.code)) priceAt.set(r.code, new Map());
+      priceAt.get(r.code)!.set(d, Number(r.close));
+    }
+  }
 
   const held = holdings(trades, priceOf, nameOf);
   const { closed } = walk(trades);
@@ -129,6 +160,15 @@ export default async function PracticePage() {
           <div className="stat-v n">{won(deposits)}</div>
         </div>
       </div>
+
+      <AssetChart
+        points={assetCurve(
+          trades,
+          moves,
+          priceAt,
+          new Date().toISOString().slice(0, 10),
+        )}
+      />
 
       {/* ── 가진 종목 ── */}
       <div className="sec-h">
@@ -253,6 +293,13 @@ export default async function PracticePage() {
           })}
         </ul>
       )}
+
+      {/* ── 쌓인 기록 ── */}
+      <div className="sec-h">
+        <h2>여태 한 일</h2>
+        <span className="n">{num(trades.length + moves.length)}건</span>
+      </div>
+      <Timeline events={timeline(trades, moves)} />
 
       {/* ── 예수금 ── */}
       <div className="sec-h">

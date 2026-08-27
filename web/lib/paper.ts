@@ -311,3 +311,126 @@ export function unpackReason(s: string | null): { kind: string; memo: string } {
   const m = s.match(/^\[([^\]]+)\]\s*(.*)$/);
   return m ? { kind: m[1], memo: m[2] } : { kind: "", memo: s };
 }
+
+/* ── 쌓인 기록 ────────────────────────────────────────────── */
+
+/** 입출금 한 줄. */
+export type CashMove = {
+  id: number;
+  date: string;
+  amount: number;
+  memo: string | null;
+};
+
+export async function getCashMoves(owner = OWNER): Promise<CashMove[]> {
+  const rows = await sql<
+    { id: string | number; cash_date: Date | string; amount: string | number; memo: string | null }[]
+  >`
+    SELECT id, cash_date, amount, memo
+      FROM paper_cash
+     WHERE owner = ${owner}
+     ORDER BY cash_date, id
+  `;
+  return rows.map((r) => ({
+    id: Number(r.id),
+    date: day(r.cash_date),
+    amount: n(r.amount),
+    memo: r.memo,
+  }));
+}
+
+/**
+ * 여태 한 일을 시간 순으로 한 줄씩.
+ *
+ * 지금 가진 것과 판 것만 보면, 사고팔기를 반복했을 때 '무엇을 해왔는지'
+ * 가 사라집니다. 예를 들어 같은 종목을 세 번 나눠 산 것은 평균단가
+ * 하나로 뭉쳐져서 흔적이 남지 않습니다. 연습은 쌓인 것을 되돌아보는
+ * 일이라, 한 일은 한 일대로 남아 있어야 합니다.
+ */
+export type Event =
+  | { kind: "BUY" | "SELL"; date: string; id: number; code: string; name: string;
+      qty: number; price: number; fee: number; tax: number; reason: string | null;
+      target: number | null; stop: number | null }
+  | { kind: "CASH"; date: string; id: number; amount: number; memo: string | null };
+
+export function timeline(trades: Trade[], cash: CashMove[]): Event[] {
+  const out: Event[] = [
+    ...trades.map(
+      (t): Event => ({
+        kind: t.side,
+        date: t.date,
+        id: t.id,
+        code: t.code,
+        name: t.name,
+        qty: t.qty,
+        price: t.price,
+        fee: t.fee,
+        tax: t.tax,
+        reason: t.reason,
+        target: t.target,
+        stop: t.stop,
+      }),
+    ),
+    ...cash.map((c): Event => ({ kind: "CASH", date: c.date, id: c.id, amount: c.amount, memo: c.memo })),
+  ];
+  // 최근 것이 위로. 같은 날이면 나중에 한 것이 위로.
+  return out.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+}
+
+/* ── 자산이 어떻게 움직였나 ───────────────────────────────── */
+
+export type Point = { d: string; 총자산: number; 넣은돈: number };
+
+/**
+ * 무슨 일이 있었던 날마다 그날 기준 총자산을 계산합니다.
+ *
+ * 왜 거래일 전부가 아니라 '일이 있었던 날' 인가:
+ *   연습은 며칠에 한 번 하는 일이라 점이 몇 개 안 됩니다. 3년치 거래일
+ *   748일을 전부 그리면 대부분 변화가 없는 평평한 선이 되고, 정작
+ *   내가 무엇을 한 날인지가 안 보입니다. 마지막 날은 항상 넣습니다 —
+ *   '지금 얼마인지' 로 끝나야 하니까요.
+ *
+ * priceAt: 종목코드 → (날짜 → 그날 종가)
+ */
+export function assetCurve(
+  trades: Trade[],
+  cash: CashMove[],
+  priceAt: Map<string, Map<string, number>>,
+  today: string,
+): Point[] {
+  const days = [...new Set([...trades.map((t) => t.date), ...cash.map((c) => c.date), today])].sort();
+  const out: Point[] = [];
+
+  for (const d of days) {
+    const upto = trades.filter((t) => t.date <= d);
+    const 넣은돈 = cash.filter((c) => c.date <= d).reduce((s, c) => s + c.amount, 0);
+    const 현금 = cashLeft(upto, 넣은돈);
+
+    const { held } = walk(upto);
+    let 평가액 = 0;
+    for (const [code, p] of held) {
+      if (p.qty <= 0) continue;
+      // 그날 값을 모르면 산 값으로 둡니다. 모르는 것을 0 으로 두면
+      // 자산이 갑자기 사라진 것처럼 보입니다.
+      const px = priceOn(priceAt, code, d);
+      평가액 += px === null ? p.cost : px * p.qty;
+    }
+    out.push({ d, 총자산: 현금 + 평가액, 넣은돈 });
+  }
+  return out;
+}
+
+/** 그날 값이 없으면 그 전 가장 가까운 날의 값을 씁니다(휴장일 등). */
+function priceOn(
+  priceAt: Map<string, Map<string, number>>,
+  code: string,
+  d: string,
+): number | null {
+  const m = priceAt.get(code);
+  if (!m) return null;
+  const hit = m.get(d);
+  if (hit !== undefined) return hit;
+  let best: string | null = null;
+  for (const k of m.keys()) if (k <= d && (best === null || k > best)) best = k;
+  return best === null ? null : (m.get(best) ?? null);
+}

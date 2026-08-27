@@ -473,6 +473,36 @@ a { color: inherit; text-decoration: none; }
 }
 .news-none-sub { font-size: .76rem; color: var(--ink-3); }
 
+/* ── 연습 자산 흐름 ───────────────────────────────────────── */
+.ac { margin: 14px 0 0; }
+.ac svg { width: 100%; height: 150px; display: block; overflow: visible; }
+.ac-line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke;
+           stroke-linejoin: round; stroke-linecap: round; }
+.ac-line.up   { stroke: var(--up-bar); }
+.ac-line.down { stroke: var(--down-bar); }
+.ac-line.flat { stroke: var(--ink-2); }
+/* 넣은 돈 — 기준선. 점선이라 총자산 선과 헷갈리지 않습니다. */
+.ac-base { fill: none; stroke: var(--rule-2); stroke-width: 1.5;
+           stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.ac-cap  { margin: 6px 0 0; font-size: .8rem; color: var(--ink-2); }
+.ac-note { margin: 4px 0 0; font-size: .72rem; color: var(--ink-3); line-height: 1.55; }
+
+/* ── 여태 한 일 ───────────────────────────────────────────── */
+.tl { list-style: none; margin: 12px 0 0; padding: 0; }
+.tl li { display: flex; gap: 10px; padding: 10px 0;
+         border-top: 1px solid var(--rule); }
+.tl li:first-child { border-top: none; }
+/* 날짜는 같은 날이면 비워 둡니다. 같은 날짜가 줄줄이 반복되면
+   정작 무엇을 했는지가 안 읽힙니다. */
+.tl-d { flex: none; width: 74px; font-size: .7rem; color: var(--ink-3);
+        padding-top: .15em; }
+.tl-b { flex: 1; min-width: 0; }
+.tl-t { display: block; font-size: .86rem; line-height: 1.5; }
+.tl-t .up   { color: var(--up); }
+.tl-t .down { color: var(--down); }
+.tl-m { display: block; font-size: .75rem; color: var(--ink-3);
+        line-height: 1.55; margin-top: 2px; }
+
 /* 첫 화면에서 연습으로 가는 길 */
 .go-practice {
   display: block; margin: 4px 0 18px; padding: 13px 15px;
