@@ -16,6 +16,10 @@
  */
 import type { Stock } from "./stocks";
 import type { Disclosure } from "./disclosures";
+import type { Peers } from "./peers";
+import { rankSentence, rankWord } from "./peers";
+import type { Quarter } from "./trend";
+import { direction } from "./trend";
 import { num } from "./format";
 
 export type Note = {
@@ -30,7 +34,12 @@ export type Note = {
  */
 const ORDER: Record<Note["tone"], number> = { watch: 0, good: 1, plain: 2 };
 
-export function readout(stock: Stock, disclosures: Disclosure[] = []): Note[] {
+export function readout(
+  stock: Stock,
+  disclosures: Disclosure[] = [],
+  peers: Peers | null = null,
+  trend: Quarter[] = [],
+): Note[] {
   const notes: Note[] = [];
   const isETF = stock.kind === "ETF";
 
@@ -74,13 +83,42 @@ export function readout(stock: Stock, disclosures: Disclosure[] = []): Note[] {
     });
   }
 
+  /* ── 흐름 — 한 시점보다 방향이 중요합니다 ── */
+  if (!isETF && trend.length >= 2) {
+    const roe흐름 = direction(trend, (q) => q.roe);
+    if (roe흐름 === "줄고 있음") {
+      notes.push({
+        tone: "watch",
+        text: "**버는 힘이 해마다 줄고 있습니다.** 작년 같은 분기와 견줘 ROE 가 계속 낮아졌습니다. 지금 숫자보다 이 방향이 더 중요합니다.",
+      });
+    } else if (roe흐름 === "늘고 있음") {
+      notes.push({
+        tone: "good",
+        text: "버는 힘이 해마다 늘고 있습니다. 작년 같은 분기와 견줘 ROE 가 계속 높아졌습니다.",
+      });
+    }
+    const 빚흐름 = direction(trend, (q) => q.debt);
+    if (빚흐름 === "늘고 있음") {
+      notes.push({
+        tone: "watch",
+        text: "빚이 해마다 늘고 있습니다. 왜 늘리는지(사업을 키우려는 것인지, 버티려는 것인지) 공시를 확인해 보세요.",
+      });
+    }
+  }
+
   /* ── 빚 ── */
   if (!isETF && stock.debt_ratio !== null) {
     const d = stock.debt_ratio;
+    // 업종 비교가 되면 '은행·건설은 원래 그렇다' 는 얼버무림 대신
+    // 같은 업종 안에서 실제로 어느 쪽인지를 말할 수 있습니다.
+    const 견줌 = peers?.debt;
     if (d >= 400) {
       notes.push({
         tone: "watch",
-        text: `**빚이 자기 돈의 ${num(d / 100, 1)}배** 입니다 (부채비율 ${num(d, 0)}%). 아주 높은 편입니다. 다만 은행·카드·건설은 원래 이렇습니다.`,
+        text: 견줌
+          ? `**빚이 자기 돈의 ${num(d / 100, 1)}배** 입니다 (부채비율 ${num(d, 0)}%). ` +
+            `${rankSentence(견줌)}.`
+          : `**빚이 자기 돈의 ${num(d / 100, 1)}배** 입니다 (부채비율 ${num(d, 0)}%). 아주 높은 편입니다. 다만 은행·카드·건설은 원래 이렇습니다.`,
       });
     } else if (d >= 200) {
       notes.push({

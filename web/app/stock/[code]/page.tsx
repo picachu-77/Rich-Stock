@@ -4,10 +4,13 @@ import PriceChart from "@/components/PriceChart";
 import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
 import Fact from "@/components/Fact";
+import TrendTable from "@/components/TrendTable";
 import Readout from "@/components/Readout";
 import { getHistory, getStock } from "@/lib/stocks";
 import { getStockNews, newsReady } from "@/lib/news";
 import { getStockDisclosures } from "@/lib/disclosures";
+import { getPeers, rankWord } from "@/lib/peers";
+import { getTrend } from "@/lib/trend";
 import * as 설명 from "@/lib/explain";
 import { readout } from "@/lib/readout";
 import { PERIODS } from "@/lib/periods";
@@ -26,9 +29,12 @@ export default async function StockPage({
 
   // 공시는 창고에서 바로 읽습니다. 뉴스는 종목 이름으로 찾기 때문에
   // 종목을 확인한 뒤에 부릅니다. 둘 다 실패해도 이 화면은 열립니다.
-  const [disclosures, news] = await Promise.all([
+  const [disclosures, news, peers, trend] = await Promise.all([
     getStockDisclosures(stock.code),
     newsReady() ? getStockNews(stock.name) : Promise.resolve([]),
+    // ETF 는 회사가 아니라 업종이 없고 재무제표도 없습니다.
+    stock.kind === "ETF" ? Promise.resolve(null) : getPeers(stock.code),
+    stock.kind === "ETF" ? Promise.resolve([]) : getTrend(stock.code),
   ]);
 
   const dir = tone(stock.change_pct);
@@ -109,11 +115,11 @@ export default async function StockPage({
           <h2>이 회사 읽어주기</h2>
           <span>숫자에서 눈에 띄는 것</span>
         </div>
-        <Readout notes={readout(stock, disclosures)} />
+        <Readout notes={readout(stock, disclosures, peers, trend)} />
 
         <div className="sec-h">
           <h2>숫자</h2>
-          <span>눌러보세요</span>
+          <span>{peers ? `${peers.used} ${num(peers.count)}곳과 견줌` : "눌러보세요"}</span>
         </div>
         <div className="facts">
           <Fact
@@ -124,11 +130,13 @@ export default async function StockPage({
           <Fact
             label="PER"
             value={stock.per && stock.per > 0 ? num(stock.per, 2) : ""}
+            peer={peers?.per ?? null}
             explain={설명.PER(stock.per, stock.kind)}
           />
           <Fact
             label="PBR"
             value={stock.pbr ? num(stock.pbr, 2) : ""}
+            peer={peers?.pbr ?? null}
             explain={설명.PBR(stock.pbr, stock.kind)}
           />
           <Fact
@@ -139,17 +147,28 @@ export default async function StockPage({
           <Fact
             label="ROE"
             value={stock.roe !== null ? `${num(stock.roe, 2)}%` : ""}
+            peer={peers?.roe ?? null}
             explain={설명.ROE(stock.roe, stock.kind)}
           />
           <Fact
             label="부채비율"
             value={stock.debt_ratio !== null ? `${num(stock.debt_ratio, 0)}%` : ""}
+            peer={peers?.debt ?? null}
             explain={설명.부채비율(stock.debt_ratio, stock.kind)}
           />
         </div>
 
         {/* 공시가 먼저입니다. 회사가 직접 신고한 사실이라 기사보다
             정확합니다. 뉴스는 열쇠가 있을 때만 그 아래에 붙습니다. */}
+        {trend.length >= 2 && <TrendTable rows={trend} />}
+
+        {/* 보다가 바로 연습으로. 목록 3,931개에서 다시 찾게 하면
+            보는 일과 연습하는 일이 끊깁니다. */}
+        <Link href={`/practice?code=${stock.code}`} className="go-practice">
+          <b>이 종목 연습으로 사보기</b>
+          <span>진짜 돈은 쓰지 않습니다 — 왜 사는지 적어두고 나중에 되돌아봅니다</span>
+        </Link>
+
         <div className="sec-h">
           <h2>공시</h2>
           <span>전자공시(DART)</span>

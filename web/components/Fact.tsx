@@ -1,4 +1,7 @@
 import type { Explain } from "@/lib/explain";
+import type { Rank } from "@/lib/peers";
+import { rankSentence, rankWord } from "@/lib/peers";
+import { num } from "@/lib/format";
 
 /**
  * 숫자 한 칸. 누르면 그 자리에서 설명이 열립니다.
@@ -18,11 +21,14 @@ export default function Fact({
   label,
   value,
   explain,
+  peer = null,
 }: {
   label: string;
   /** 이미 사람이 읽을 수 있게 다듬은 값. 빈 글자면 '—' 로 나옵니다. */
   value: string;
   explain: Explain;
+  /** 같은 업종 안에서 몇 번째인지. 없으면 안 보여줍니다. */
+  peer?: Rank | null;
 }) {
   return (
     <details className="fact">
@@ -39,6 +45,10 @@ export default function Fact({
         ) : (
           <span className="fact-v none">—</span>
         )}
+        {/* 같은 업종 안에서 어느 쪽인지. 접힌 상태에서도 보여야 하므로
+            summary 안에 둡니다. details 는 summary 말고는 다 숨깁니다 —
+            밖에 두면 눌러야만 보이는데, 그러면 아무도 안 봅니다. */}
+        {peer && <span className="fact-p">{rankWord(peer)}</span>}
       </summary>
 
       <div className="fact-x">
@@ -48,6 +58,12 @@ export default function Fact({
         <p>
           <b>지금</b> {md(explain.지금)}
         </p>
+        {peer && (
+          <p>
+            <b>업종</b> {rankSentence(peer)}. 가운데쯤 되는 회사는{" "}
+            <span className="n">{num(peer.median, 2)}</span> 입니다.
+          </p>
+        )}
         <p className="fact-care">
           <b>주의</b> {md(explain.주의)}
         </p>

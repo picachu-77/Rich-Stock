@@ -378,6 +378,36 @@ a { color: inherit; text-decoration: none; }
 .hint-x p:first-child { margin-top: 0; }
 .hint-x .hint-care { color: var(--ink); }
 
+/* 숫자 칸에 붙는 업종 한마디 */
+.fact-p {
+  display: block; margin-top: 2px;
+  font-size: .66rem; color: var(--ink-3); line-height: 1.3;
+}
+
+/* ── 재무 흐름 표 ─────────────────────────────────────────── */
+/* 좁은 화면에서는 가로로 넘겨 봅니다. 표를 억지로 우겨넣으면
+   글자가 세로로 쪼개져 못 읽습니다. 화면 자체는 안 밀립니다. */
+.tt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch;
+           border: 1px solid var(--rule); border-radius: var(--radius);
+           background: var(--surface); margin: 12px 0 0; }
+.tt { border-collapse: collapse; font-size: .76rem; width: 100%; }
+.tt th, .tt td { padding: 8px 10px; text-align: right; white-space: nowrap; }
+.tt thead th { color: var(--ink-3); font-weight: 500; font-size: .68rem;
+               border-bottom: 1px solid var(--rule); line-height: 1.3; }
+/* 항목 이름은 왼쪽에 붙여 둡니다. 넘겨 봐도 무엇의 값인지 보이게. */
+.tt th[scope="row"] {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--surface); text-align: left;
+  color: var(--ink-2); font-weight: 700;
+  border-right: 1px solid var(--rule);
+}
+.tt thead th:first-child { position: sticky; left: 0; z-index: 2;
+                           background: var(--surface); border-right: 1px solid var(--rule); }
+.tt tbody tr + tr th, .tt tbody tr + tr td { border-top: 1px solid var(--rule); }
+.tt td.up { color: var(--up); }
+.tt td.down { color: var(--down); }
+.tt-note { margin: 8px 0 0; font-size: .72rem; color: var(--ink-3); line-height: 1.6; }
+
 /* ── 이 회사 읽어주기 ─────────────────────────────────────── */
 .ro { list-style: none; margin: 14px 0 0; padding: 0; }
 .ro li {

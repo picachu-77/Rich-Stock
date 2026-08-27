@@ -37,14 +37,19 @@ export function BuyForm({
   stocks,
   reasons,
   cash,
+  preset,
 }: {
   action: (p: Result | null, f: FormData) => Promise<Result>;
   stocks: { code: string; name: string; price: number }[];
   reasons: [string, string][];
   cash: number;
+  /** 종목 화면에서 넘어왔을 때 미리 골라둘 종목 */
+  preset?: string;
 }) {
   const [res, run] = useActionState(action, null);
-  const [code, setCode] = useState("");
+  // 종목을 보다가 넘어온 것이면 그 종목이 이미 골라져 있어야 합니다.
+  // 다시 3,931개에서 찾게 하면 넘어온 뜻이 없습니다.
+  const [code, setCode] = useState(preset && stocks.some((s) => s.code === preset) ? preset : "");
   const [qty, setQty] = useState("");
 
   const picked = stocks.find((s) => s.code === code);

@@ -30,7 +30,13 @@ export const dynamic = "force-dynamic";
 
 const won = (v: number) => `${num(Math.round(v))}원`;
 
-export default async function PracticePage() {
+export default async function PracticePage({
+  searchParams,
+}: {
+  /** 종목 화면에서 넘어오면 ?code=005930 이 붙습니다. */
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const { code: 미리고른종목 } = await searchParams;
   if (!gateReady()) {
     return (
       <Shell>
@@ -225,7 +231,13 @@ export default async function PracticePage() {
         <h2>사기</h2>
         <span>왜 사는지 적어야 합니다</span>
       </div>
-      <BuyForm action={사기} stocks={살수있는종목} reasons={BUY_REASONS} cash={cash} />
+      <BuyForm
+        action={사기}
+        stocks={살수있는종목}
+        reasons={BUY_REASONS}
+        cash={cash}
+        preset={미리고른종목 ?? ""}
+      />
 
       {/* ── 팔기 ── */}
       <div className="sec-h">
