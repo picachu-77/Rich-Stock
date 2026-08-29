@@ -2,9 +2,11 @@ import Link from "next/link";
 import StockList from "@/components/StockList";
 import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
+import IndexStrip from "@/components/IndexStrip";
 import { getLastDate, getStocks } from "@/lib/stocks";
 import { getMarketNews, newsReady } from "@/lib/news";
 import { getRecentDisclosures } from "@/lib/disclosures";
+import { getIndexes } from "@/lib/indexes";
 import { num } from "@/lib/format";
 
 /**
@@ -16,11 +18,12 @@ import { num } from "@/lib/format";
 export const revalidate = 3600;
 
 export default async function Home() {
-  const [stocks, lastDate, disclosures, news] = await Promise.all([
+  const [stocks, lastDate, disclosures, news, indexes] = await Promise.all([
     getStocks(),
     getLastDate(),
     getRecentDisclosures(4),
     newsReady() ? getMarketNews(3) : Promise.resolve([]),
+    getIndexes(),
   ]);
 
   // 오늘 장이 어땠는지 한 줄. 숫자를 하나하나 읽기 전에 분위기가 먼저
@@ -33,7 +36,7 @@ export default async function Home() {
     <div className="wrap">
       <header className="head">
         <div className="head-top">
-          <h1>국내주식</h1>
+          <h1>한국·미국 주식</h1>
           {lastDate && <span className="head-date n">{lastDate}</span>}
         </div>
 
@@ -51,6 +54,10 @@ export default async function Home() {
             <span className="down"><b className="n">{num(down)}</b> ▼</span>
           </div>
         )}
+
+        {/* 종목 하나가 빠진 날, 시장 전체가 빠진 것인지 이 회사만
+            그런 것인지 알려면 기준선이 있어야 합니다. */}
+        <IndexStrip points={indexes} />
       </header>
 
       <main>

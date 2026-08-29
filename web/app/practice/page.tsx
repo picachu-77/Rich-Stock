@@ -73,9 +73,11 @@ export default async function PracticePage({
   ]);
 
   // 지금 값을 붙이려면 최근 시세가 필요합니다.
-  const priceRows = await sql<{ code: string; name: string; close: string | number }[]>`
+  const priceRows = await sql<
+    { code: string; name: string; close: string | number; currency: string | null }[]
+  >`
     WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price)
-    SELECT t.code, t.name, c.close
+    SELECT t.code, t.name, t.currency, c.close
       FROM ticker t
       CROSS JOIN bound b
       JOIN LATERAL (
@@ -140,7 +142,15 @@ export default async function PracticePage({
   }
 
   const 살수있는종목 = priceRows
-    .map((r) => ({ code: r.code, name: r.name, price: Number(r.close) }))
+    .map((r) => ({
+      code: r.code,
+      name: r.name,
+      // 연습 계좌는 원화 계좌입니다. 미국 종목도 그날 환율로 바꾼
+      // 원화 값으로 사고팝니다 — 달러 잔고를 따로 두면 환전까지
+      // 흉내내야 하고, 그것은 연습의 목적이 아닙니다.
+      price: Number(r.close),
+      usd: (r.currency ?? "KRW") === "USD",
+    }))
     .filter((s) => s.price > 0);
 
   return (

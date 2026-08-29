@@ -40,6 +40,11 @@ def mark_delisted(conn, as_of: date) -> int:
     """
     오늘 목록에서 사라진 종목을 '상장폐지(is_active=FALSE)'로 표시합니다.
     데이터를 지우지는 않습니다 — 과거 시세는 그대로 남겨둡니다.
+
+    ★ 코스피·코스닥만 봅니다 ★
+      이 함수가 보는 목록은 한국거래소에서 받아온 것입니다. 미국 종목은
+      애초에 그 목록에 없으니, 시장을 가리지 않으면 수집하자마자 전부
+      '상장폐지' 로 찍힙니다. 시장을 못 박아 둡니다.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -47,6 +52,7 @@ def mark_delisted(conn, as_of: date) -> int:
             UPDATE ticker
                SET is_active = FALSE, updated_at = now()
              WHERE is_active = TRUE
+               AND market IN ('KOSPI', 'KOSDAQ')
                AND (last_seen IS NULL OR last_seen < %s);
             """,
             (as_of,),
@@ -91,6 +97,120 @@ ON CONFLICT (code, trade_date) DO UPDATE SET
 def save_fundamentals(conn, rows: list[tuple]) -> int:
     """투자지표를 저장합니다. 시세가 이미 있으면 지표 칸만 덧씌웁니다."""
     return bulk_upsert(conn, UPSERT_FUNDAMENTAL_SQL, rows)
+
+
+# ── 미국 종목 저장 ────────────────────────────────────────────
+#
+# 한국 종목과 같은 표(ticker · daily_price)에 넣습니다. 표를 따로 만들면
+# 목록·검색·차트·모의투자를 전부 두 벌로 만들어야 합니다. 같은 표에 두면
+# 이미 만들어 둔 것이 그대로 돕니다.
+#
+# 다른 점은 두 가지뿐입니다 — currency 가 'USD' 이고, 업종을 한국표준
+# 산업분류 코드가 아니라 이름으로 바로 넣습니다(미국 회사에는 그 코드가
+# 없습니다).
+UPSERT_US_TICKER_SQL = """
+INSERT INTO ticker (code, name, market, kind, currency, sector_name,
+                    is_active, first_seen, last_seen)
+VALUES %s
+ON CONFLICT (code) DO UPDATE SET
+    name        = EXCLUDED.name,
+    market      = EXCLUDED.market,
+    kind        = EXCLUDED.kind,
+    currency    = EXCLUDED.currency,
+    sector_name = COALESCE(EXCLUDED.sector_name, ticker.sector_name),
+    is_active   = TRUE,
+    first_seen  = LEAST(ticker.first_seen, EXCLUDED.first_seen),
+    last_seen   = GREATEST(ticker.last_seen, EXCLUDED.last_seen),
+    updated_at  = now();
+"""
+
+
+def save_us_tickers(conn, tickers: list[dict], as_of: date) -> int:
+    """미국 종목 목록을 저장(갱신)합니다."""
+    rows = [
+        (t["code"], t["name"], t["market"], t["kind"], "USD",
+         t.get("sector_name"), True, as_of, as_of)
+        for t in tickers
+    ]
+    return bulk_upsert(conn, UPSERT_US_TICKER_SQL, rows)
+
+
+# close 에는 원으로 바꾼 값을, close_local 에는 달러 원본을 넣습니다.
+UPSERT_US_PRICE_SQL = """
+INSERT INTO daily_price (code, trade_date, close, close_local,
+                         change_pct, volume, market_cap)
+VALUES %s
+ON CONFLICT (code, trade_date) DO UPDATE SET
+    close       = EXCLUDED.close,
+    close_local = EXCLUDED.close_local,
+    change_pct  = COALESCE(EXCLUDED.change_pct, daily_price.change_pct),
+    volume      = EXCLUDED.volume,
+    market_cap  = COALESCE(EXCLUDED.market_cap, daily_price.market_cap);
+"""
+
+
+def save_us_prices(conn, rows: list[tuple]) -> int:
+    """미국 종목 시세를 저장합니다."""
+    return bulk_upsert(conn, UPSERT_US_PRICE_SQL, rows)
+
+
+# ── 지수·환율 저장 ────────────────────────────────────────────
+UPSERT_INDEX_SQL = """
+INSERT INTO market_index (symbol, trade_date, close, change_pct)
+VALUES %s
+ON CONFLICT (symbol, trade_date) DO UPDATE SET
+    close      = EXCLUDED.close,
+    change_pct = EXCLUDED.change_pct;
+"""
+
+
+def save_index_prices(conn, rows: list[tuple]) -> int:
+    """지수와 환율을 저장합니다."""
+    return bulk_upsert(conn, UPSERT_INDEX_SQL, rows)
+
+
+def fx_rates(conn, symbol: str = "KRW=X") -> dict:
+    """
+    날짜별 환율표를 돌려줍니다. 미국 종목 값을 원으로 바꿀 때 씁니다.
+    """
+    rows = fetch_all(
+        conn,
+        """
+        SELECT trade_date, close FROM market_index
+         WHERE symbol = %s AND close IS NOT NULL
+         ORDER BY trade_date;
+        """,
+        (symbol,),
+    )
+    return {r[0]: float(r[1]) for r in rows}
+
+
+# ── 미국 종목 재무지표 저장 ────────────────────────────────────
+#
+# ★ 분기(fiscal_quarter)를 0 으로 둡니다 ★
+#   한국 종목은 DART 가 분기보고서를 주니 1·2·3·4 로 넣습니다.
+#   야후가 주는 값은 '최근 12개월(TTM)' 하나뿐이라 어느 분기라고 말할
+#   수 없습니다. 4(사업보고서)로 넣으면 있지도 않은 연간보고서가
+#   있는 것처럼 됩니다. 그래서 0 = '최근 1년' 이라는 자리를 씁니다.
+#
+#   원본 금액(매출액·자본총계 등)은 비워 둡니다. 그 칸들은 '원' 단위로
+#   적어 둔 곳이라 달러 금액을 넣으면 단위가 뒤섞입니다.
+UPSERT_US_FIN_SQL = """
+INSERT INTO financial (code, fiscal_year, fiscal_quarter,
+                       roe, debt_ratio, op_margin, report_code)
+VALUES %s
+ON CONFLICT (code, fiscal_year, fiscal_quarter) DO UPDATE SET
+    roe         = EXCLUDED.roe,
+    debt_ratio  = EXCLUDED.debt_ratio,
+    op_margin   = EXCLUDED.op_margin,
+    report_code = EXCLUDED.report_code,
+    updated_at  = now();
+"""
+
+
+def save_us_financials(conn, rows: list[tuple]) -> int:
+    """미국 종목의 최근 1년 재무지표를 저장합니다."""
+    return bulk_upsert(conn, UPSERT_US_FIN_SQL, rows)
 
 
 # ── 수집 진행 기록 ────────────────────────────────────────────

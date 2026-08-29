@@ -28,6 +28,8 @@ desktop.ini
 # 웹 화면(Next.js)이 자동으로 만드는 것들
 web/node_modules/
 web/.next/
+# 웹을 web 폴더 밖에서 실수로 빌드하면 여기에 생깁니다
+.next/
 web/out/
 web/.vercel/
 web/.env*.local

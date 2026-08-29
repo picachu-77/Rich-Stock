@@ -40,7 +40,7 @@ export function BuyForm({
   preset,
 }: {
   action: (p: Result | null, f: FormData) => Promise<Result>;
-  stocks: { code: string; name: string; price: number }[];
+  stocks: { code: string; name: string; price: number; usd?: boolean }[];
   reasons: [string, string][];
   cash: number;
   /** 종목 화면에서 넘어왔을 때 미리 골라둘 종목 */
@@ -143,6 +143,14 @@ export function BuyForm({
               />
             </label>
           </div>
+
+          {picked?.usd && (
+            <p className="pf-note">
+              미국 종목입니다. 연습 계좌는 원화 계좌라 <b>그날 환율로 바꾼
+              원화 값</b> 으로 사고팝니다. 실제로 살 때는 증권사 환율과
+              환전 수수료가 따로 붙습니다.
+            </p>
+          )}
 
           <p className="pf-note">
             목표가와 손절가는 <b>사기 전에</b> 정해야 뜻이 있습니다. 사고 나면

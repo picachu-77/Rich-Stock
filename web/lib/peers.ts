@@ -46,6 +46,8 @@ export type Peers = {
 type Row = {
   code: string;
   sector_code: string | null;
+  sector_name: string | null;
+  currency: string | null;
   per: string | number | null;
   pbr: string | number | null;
   roe: string | number | null;
@@ -72,7 +74,8 @@ export async function getPeers(code: string): Promise<Peers | null> {
         FROM financial f
        ORDER BY f.code, f.fiscal_year DESC, f.fiscal_quarter DESC
     )
-    SELECT t.code, t.sector_code, c.per, c.pbr, lf.roe, lf.debt_ratio
+    SELECT t.code, t.sector_code, t.sector_name, t.currency,
+           c.per, c.pbr, lf.roe, lf.debt_ratio
       FROM ticker t
       CROSS JOIN bound b
       JOIN LATERAL (
@@ -81,25 +84,55 @@ export async function getPeers(code: string): Promise<Peers | null> {
          ORDER BY p.trade_date DESC LIMIT 1
       ) c ON TRUE
       LEFT JOIN latest_fin lf ON lf.code = t.code
-     WHERE t.is_active AND t.kind = 'STOCK' AND t.sector_code IS NOT NULL
+     WHERE t.is_active AND t.kind = 'STOCK'
+       AND (t.sector_code IS NOT NULL OR t.sector_name IS NOT NULL)
   `;
 
   const me = rows.find((r) => r.code === code);
-  if (!me || !me.sector_code) return null;
+  if (!me) return null;
+
+  /**
+   * ★ 같은 나라끼리만 견줍니다 ★
+   *   삼성전자를 애플과 나란히 놓고 '반도체 32곳 중 5위' 라고 하면
+   *   안 됩니다. 회계 기준도, 세금도, 주가가 매겨지는 방식도 다릅니다.
+   *   업종 이름이 같아도 뜻이 같지 않습니다.
+   */
+  const 같은나라 = rows.filter(
+    (r) => (r.currency ?? "KRW") === (me.currency ?? "KRW"),
+  );
+
+  /**
+   * 미국 종목에는 한국표준산업분류 코드가 없습니다. 대신 야후가 주는
+   * 업종 이름(기술·금융·건강 등 11가지)을 그대로 씁니다. 한 묶음이
+   * 크기 때문에 작은 묶음으로 물러설 일이 없습니다.
+   */
+  if (!me.sector_code) {
+    const sector = me.sector_name;
+    if (!sector) return null;
+    const mates = 같은나라.filter((r) => r.sector_name === sector);
+    if (mates.length < MIN_PEERS) return null;
+    return ranks(me, mates, sector, sector);
+  }
 
   const sector = sectorName(me.sector_code);
   if (sector === UNKNOWN) return null;
 
   // 자세한 업종으로 먼저 모아보고, 적으면 큰 묶음으로.
-  let mates = rows.filter((r) => sectorName(r.sector_code) === sector);
+  let mates = 같은나라.filter((r) => sectorName(r.sector_code) === sector);
   let used = sector;
   if (mates.length < MIN_PEERS) {
     const group = sectorGroup(me.sector_code);
     if (group === UNKNOWN) return null;
-    mates = rows.filter((r) => sectorGroup(r.sector_code) === group);
+    mates = 같은나라.filter((r) => sectorGroup(r.sector_code) === group);
     used = group;
     if (mates.length < MIN_PEERS) return null;
   }
+
+  return ranks(me, mates, sector, used);
+}
+
+/** 한 종목을 고른 무리와 견줘 등수를 냅니다. */
+function ranks(me: Row, mates: Row[], sector: string, used: string): Peers {
 
   /**
    * lowerIsBetter : 낮을수록 좋은 지표인가 (PER·PBR·부채비율)

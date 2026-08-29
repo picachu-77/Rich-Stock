@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ListStock } from "@/lib/stocks";
 import { chosungOf, scoreOf } from "@/lib/search";
-import { eok, limitHit, num, railWidth, signed, tone } from "@/lib/format";
+import { eok, limitHit, num, price, railWidth, signed, tone } from "@/lib/format";
 
 type SortKey = "시가총액" | "많이 오른" | "많이 내린" | "1년 수익률" | "PER 낮은" | "배당 높은";
 
@@ -26,18 +26,45 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
   const [sort, setSort] = useState<SortKey>("시가총액");
   const [sector, setSector] = useState("");   // "" = 업종 안 가림
   const [kind, setKind] = useState("");       // "" | "주식" | "ETF"
+  const [country, setCountry] = useState(""); // "" | "한국" | "미국"
   const [shown, setShown] = useState(PAGE);
+
+  /** 나라로 먼저 가른 목록. 업종 목록도 여기서 뽑습니다 — 한국 업종과
+      미국 업종은 분류 자체가 달라서, 섞어 놓으면 고르는 칸이 두 배로
+      길어지고 무엇을 고르는지도 흐려집니다. */
+  const 나라것 = useMemo(
+    () =>
+      country === ""
+        ? stocks
+        : stocks.filter((s) =>
+            country === "미국" ? s.currency === "USD" : s.currency !== "USD",
+          ),
+    [stocks, country],
+  );
 
   /** 고를 수 있는 업종과 그 개수. 많은 업종부터 위로. */
   const sectors = useMemo(() => {
     const n = new Map<string, number>();
-    for (const s of stocks) if (s.sector) n.set(s.sector, (n.get(s.sector) ?? 0) + 1);
+    for (const s of 나라것) if (s.sector) n.set(s.sector, (n.get(s.sector) ?? 0) + 1);
     return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
-  }, [stocks]);
+  }, [나라것]);
+
+  /** 나라를 바꾸면 업종은 풀어야 합니다. 한국 업종을 고른 채 미국으로
+      넘어가면 맞는 종목이 하나도 없어 빈 화면이 됩니다. */
+  const 나라바꾸기 = (v: string) => {
+    setCountry(v);
+    setSector("");
+    setShown(PAGE);
+  };
 
   /** 거르기를 하나라도 걸었는가 */
-  const 거른중 = sector !== "" || kind !== "";
-  const 초기화 = () => { setSector(""); setKind(""); setShown(PAGE); };
+  const 거른중 = sector !== "" || kind !== "" || country !== "";
+  const 초기화 = () => {
+    setSector("");
+    setKind("");
+    setCountry("");
+    setShown(PAGE);
+  };
 
   // 초성은 한 번만 계산해 둡니다 (칠 때마다 다시 만들면 느려집니다)
   const chosung = useMemo(() => {
@@ -49,8 +76,8 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
   const view = useMemo(() => {
     const query = q.trim();
 
-    // 업종·종류로 먼저 좁히고, 그다음에 찾거나 줄 세웁니다.
-    const 후보 = stocks.filter(
+    // 나라·업종·종류로 먼저 좁히고, 그다음에 찾거나 줄 세웁니다.
+    const 후보 = 나라것.filter(
       (s) =>
         (sector === "" || s.sector === sector) &&
         (kind === "" || (kind === "ETF" ? s.kind === "ETF" : s.kind !== "ETF")),
@@ -84,7 +111,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
       case "배당 높은":   return by((s) => (s.div_yield ? s.div_yield : null));
       default:            return by((s) => s.market_cap);
     }
-  }, [stocks, q, sort, sector, kind, chosung]);
+  }, [나라것, q, sort, sector, kind, chosung]);
 
   const list = view.slice(0, shown);
   const searching = q.trim().length > 0;
@@ -111,8 +138,9 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
 
         {!searching && (
           <div className="picks">
+            {/* 업종은 이름이 길어서 한 줄을 다 씁니다 */}
             <select
-              className="pick"
+              className="pick wide"
               value={sector}
               onChange={(e) => { setSector(e.target.value); setShown(PAGE); }}
               aria-label="업종으로 좁히기"
@@ -123,6 +151,16 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
                   {name} ({n.toLocaleString("ko-KR")})
                 </option>
               ))}
+            </select>
+            <select
+              className="pick"
+              value={country}
+              onChange={(e) => 나라바꾸기(e.target.value)}
+              aria-label="나라로 좁히기"
+            >
+              <option value="">한국·미국 전부</option>
+              <option value="한국">한국만</option>
+              <option value="미국">미국만</option>
             </select>
             <select
               className="pick"
@@ -156,7 +194,15 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
         {!searching && 거른중 && (
           <>
             {" · "}
-            <b>{[sector, kind && (kind === "ETF" ? "ETF만" : "주식만")].filter(Boolean).join(" · ")}</b>
+            <b>
+              {[
+                country && `${country}만`,
+                sector,
+                kind && (kind === "ETF" ? "ETF만" : "주식만"),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </b>
             {" "}
             <button className="count-x" onClick={초기화}>
               지우기
@@ -168,7 +214,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
       {view.length === 0 && !searching && 거른중 && (
         <div className="empty">
           <b>고르신 조건에 맞는 종목이 없습니다</b>
-          업종과 종류를 함께 좁히면 남는 게 없을 수 있습니다.
+          나라·업종·종류를 함께 좁히면 남는 게 없을 수 있습니다.
           <br />
           <button className="more" style={{ marginTop: 12 }} onClick={초기화}>
             조건 지우기
@@ -186,7 +232,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
 
       {list.map((s) => {
         const dir = tone(s.change_pct);
-        const lim = limitHit(s.change_pct);
+        const lim = limitHit(s.change_pct, s.currency);
         return (
           <Link key={s.code} href={`/stock/${s.code}`} className="row">
             <div className="row-grid">
@@ -216,7 +262,11 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
 
               {/* 오른쪽 — 얼마인가 */}
               <div className="row-r">
-                <div className="row-px n">{s.close === null ? "—" : num(s.close)}</div>
+                <div className="row-px n">
+                  {s.currency === "USD"
+                    ? (price(s.close_local, "USD") || "—")
+                    : (s.close === null ? "—" : num(s.close))}
+                </div>
                 <div className={`row-chg n ${dir}`}>
                   {signed(s.change_pct)}{s.change_pct !== null && "%"}
                 </div>

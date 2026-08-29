@@ -2,6 +2,7 @@
 # 설치 명령:  pip install -r requirements.txt
 
 pykrx>=1.0.45           # 한국거래소 시세를 가져오는 도구
+yfinance>=0.2.60        # 미국 시세·지수·환율 (야후 파이낸스)
 psycopg2-binary>=2.9.9  # 파이썬 <-> Postgres(Neon) 연결 담당
 python-dotenv>=1.0.1    # .env 파일에서 비밀값을 읽어오는 도구
 pandas>=2.2.0           # 표 형태 데이터를 다루는 도구

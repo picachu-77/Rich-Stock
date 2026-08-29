@@ -14,7 +14,7 @@ import { getTrend } from "@/lib/trend";
 import * as 설명 from "@/lib/explain";
 import { readout } from "@/lib/readout";
 import { PERIODS } from "@/lib/periods";
-import { eok, limitHit, num, railWidth, signed, tone } from "@/lib/format";
+import { eok, limitHit, num, price, railWidth, signed, tone } from "@/lib/format";
 
 export const revalidate = 3600;
 
@@ -30,7 +30,11 @@ export default async function StockPage({
   // 공시는 창고에서 바로 읽습니다. 뉴스는 종목 이름으로 찾기 때문에
   // 종목을 확인한 뒤에 부릅니다. 둘 다 실패해도 이 화면은 열립니다.
   const [disclosures, news, peers, trend] = await Promise.all([
-    getStockDisclosures(stock.code),
+    // 미국 회사는 DART(한국 전자공시) 대상이 아닙니다. 빈 목록을
+    // 보여주면 '이 회사는 아무것도 신고하지 않았다' 로 읽혀 틀립니다.
+    stock.currency === "USD"
+      ? Promise.resolve([])
+      : getStockDisclosures(stock.code),
     newsReady() ? getStockNews(stock.name) : Promise.resolve([]),
     // ETF 는 회사가 아니라 업종이 없고 재무제표도 없습니다.
     stock.kind === "ETF" ? Promise.resolve(null) : getPeers(stock.code),
@@ -38,7 +42,8 @@ export default async function StockPage({
   ]);
 
   const dir = tone(stock.change_pct);
-  const lim = limitHit(stock.change_pct);
+  const lim = limitHit(stock.change_pct, stock.currency);
+  const 달러 = stock.currency === "USD";
 
   return (
     <div className="wrap">
@@ -53,7 +58,9 @@ export default async function StockPage({
 
         <div className="px-row">
           <span className={`px-big n ${dir}`}>
-            {stock.close === null ? "—" : num(stock.close)}
+            {달러
+              ? (price(stock.close_local, "USD") || "—")
+              : (stock.close === null ? "—" : num(stock.close))}
           </span>
           <span className={`n ${dir}`} style={{ fontSize: "1rem", fontWeight: 700 }}>
             {signed(stock.change_pct)}{stock.change_pct !== null && "%"}
@@ -69,6 +76,19 @@ export default async function StockPage({
             <i className={dir} style={{ width: `${railWidth(stock.change_pct)}%` }} />
           )}
         </div>
+
+        {/* 미국 종목은 달러가 진짜 시세입니다. 원화는 그날 환율로 바꾼
+            어림값이라, 그렇다고 밝혀 적습니다. 실제로 살 때는 증권사
+            환율과 수수료가 붙어서 이 값과 조금 다릅니다. */}
+        {달러 && stock.close !== null && (
+          <p className="fx-note">
+            원화로는 약 <b className="n">{num(stock.close)}원</b> 입니다
+            (<span className="n">{stock.trade_date}</span> 환율 기준).
+            아래 시가총액도 원화로 바꾼 값이고, <b>수익률과 등락률은 달러
+            기준</b> 입니다 — 환율 움직임을 섞으면 이 회사가 얼마나 올랐는지가
+            흐려집니다.
+          </p>
+        )}
       </header>
 
       <main>
@@ -107,7 +127,7 @@ export default async function StockPage({
           </div>
         </details>
 
-        <PriceChart data={history} />
+        <PriceChart data={history} currency={stock.currency} />
 
         {/* 숫자를 보기 전에 먼저 읽어줍니다. 초보자는 숫자를 봐도
             무엇이 이상한지 모르기 때문에 순서가 중요합니다. */}
@@ -169,14 +189,23 @@ export default async function StockPage({
           <span>진짜 돈은 쓰지 않습니다 — 왜 사는지 적어두고 나중에 되돌아봅니다</span>
         </Link>
 
-        <div className="sec-h">
-          <h2>공시</h2>
-          <span>전자공시(DART)</span>
-        </div>
-        <DisclosureList
-          items={disclosures}
-          empty={`최근 1년 사이 '${stock.name}' 이름으로 올라온 공시가 없습니다. ETF 는 회사가 아니라서 공시가 없습니다.`}
-        />
+        {달러 ? (
+          <p className="foot" style={{ marginTop: 18 }}>
+            미국 회사는 한국 전자공시(DART) 대상이 아니라 이 화면에 공시가
+            없습니다. 미국 공시는 증권거래위원회(SEC)의 EDGAR 에 올라옵니다.
+          </p>
+        ) : (
+          <>
+            <div className="sec-h">
+              <h2>공시</h2>
+              <span>전자공시(DART)</span>
+            </div>
+            <DisclosureList
+              items={disclosures}
+              empty={`최근 1년 사이 '${stock.name}' 이름으로 올라온 공시가 없습니다. ETF 는 회사가 아니라서 공시가 없습니다.`}
+            />
+          </>
+        )}
 
         {newsReady() && (
           <>
@@ -193,7 +222,9 @@ export default async function StockPage({
         )}
 
         <p className="foot">
-          PER·PBR·배당수익률은 한국거래소, ROE·부채비율은 DART 전자공시 기준입니다.
+          {달러
+            ? "시세·PER·PBR·배당수익률·ROE·부채비율은 야후 파이낸스 기준입니다. 원화 값은 그날 환율로 바꾼 어림값입니다."
+            : "PER·PBR·배당수익률은 한국거래소, ROE·부채비율은 DART 전자공시 기준입니다."}
           ETF 는 재무제표가 없어 빈칸입니다. 빈칸은 &lsquo;0&rsquo; 이 아니라
           &lsquo;아직 자료가 없다&rsquo;는 뜻입니다.
         </p>

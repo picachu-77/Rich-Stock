@@ -28,7 +28,18 @@ const W = 700;
 const H = 220;
 const PAD = { t: 10, r: 8, b: 20, l: 8 };
 
-export default function PriceChart({ data }: { data: PricePoint[] }) {
+export default function PriceChart({
+  data,
+  currency = "KRW",
+}: {
+  data: PricePoint[];
+  /** 돈 단위. 미국 종목은 달러로 적습니다. */
+  currency?: string;
+}) {
+  // 값 옆에 붙일 단위. 앞뒤 어느 쪽에 붙는지가 달라서 함수로 둡니다.
+  const money = (v: number, digits = 0) =>
+    currency === "USD" ? `$${num(v, 2)}` : `${num(v, digits)}원`;
+
   const [range, setRange] = useState<(typeof RANGES)[number]["label"]>("1년");
   const [hit, setHit] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -105,7 +116,7 @@ export default function PriceChart({ data }: { data: PricePoint[] }) {
       <div className="chart-cap">
         {cur ? (
           <span className="n">
-            <b style={{ color: "var(--ink)" }}>{cur.d}</b> · {num(cur.c)}원
+            <b style={{ color: "var(--ink)" }}>{cur.d}</b> · {money(cur.c)}
           </span>
         ) : (
           <span className="n">
@@ -156,8 +167,8 @@ export default function PriceChart({ data }: { data: PricePoint[] }) {
       <div className="n"
            style={{ display: "flex", justifyContent: "space-between",
                     fontSize: ".74rem", color: "var(--ink-3)", marginTop: -4 }}>
-        <span className="n">{num(geo.lo)}원</span>
-        <span className="n">{num(geo.hi)}원</span>
+        <span className="n">{money(geo.lo)}</span>
+        <span className="n">{money(geo.hi)}</span>
       </div>
       <div style={{ fontSize: ".76rem", color: "var(--ink-3)", marginTop: 4 }}>
         차트를 손가락으로 짚으면 그날 값이 나옵니다.

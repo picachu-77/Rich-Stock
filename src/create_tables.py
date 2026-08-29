@@ -124,6 +124,21 @@ ALTER TABLE daily_price ADD COLUMN IF NOT EXISTS bps       BIGINT;
 ALTER TABLE daily_price ADD COLUMN IF NOT EXISTS div_yield NUMERIC(8, 2);
 ALTER TABLE daily_price ADD COLUMN IF NOT EXISTS dps       BIGINT;
 
+-- 종목 표에 '돈 단위' 칸 추가
+--   한국 종목은 원(KRW), 미국 종목은 달러(USD)입니다.
+--   이 칸이 없으면 화면이 12만이 12만원인지 12만달러인지 알 수 없습니다.
+ALTER TABLE ticker ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'KRW';
+
+-- 일별시세에 '그 나라 돈으로 본 종가' 칸 추가
+--   close 는 늘 원(KRW)입니다. 미국 종목은 그날 환율로 바꿔 넣습니다.
+--   그래야 목록·시가총액 줄세우기·모의투자가 한 단위로 돌아갑니다.
+--   close_local 에는 손대지 않은 진짜 시세(달러)를 함께 넣습니다.
+--   한국 종목은 둘이 같아서 비워 둡니다.
+--
+--   ※ 빈 칸(NULL)만 있는 새 칸은 표를 다시 쓰지 않습니다. 280만 줄이
+--     있어도 즉시 끝나고 자리도 차지하지 않습니다.
+ALTER TABLE daily_price ADD COLUMN IF NOT EXISTS close_local NUMERIC(18, 4);
+
 -- ─────────────────────────────────────────────────────────────
 -- 5) 재무지표 표  (DART 전자공시에서 가져옵니다)
 --    시세와 완전히 분리된 표입니다. 이쪽에 문제가 생겨도
@@ -251,6 +266,29 @@ CREATE TABLE IF NOT EXISTS disclosure (
 CREATE INDEX IF NOT EXISTS idx_disc_code ON disclosure (code, rcept_dt DESC);
 CREATE INDEX IF NOT EXISTS idx_disc_date ON disclosure (rcept_dt DESC);
 CREATE INDEX IF NOT EXISTS idx_disc_cat  ON disclosure (category, rcept_dt DESC);
+
+-- ─────────────────────────────────────────────────────────────
+-- 10) 지수와 환율 — '오늘 시장 전체가 어땠나'
+-- ─────────────────────────────────────────────────────────────
+--    종목 하나가 3% 빠졌을 때, 시장 전체가 빠진 것인지 이 회사만
+--    그런 것인지 알아야 합니다. 지금까지는 알 방법이 없었습니다.
+--
+--    환율도 여기 같이 둡니다. 미국 종목 값을 원으로 바꿀 때 씁니다.
+--
+--    종목 표(daily_price)와 따로 두는 이유: 지수는 4,532.11 처럼
+--    소수가 있고 종목수·시가총액 같은 칸이 필요 없습니다. 280만 줄짜리
+--    표에 안 쓰는 칸을 늘리는 것보다 작은 표를 하나 두는 편이 낫습니다.
+--
+--    수집: python -m src.us_collect
+CREATE TABLE IF NOT EXISTS market_index (
+    symbol      TEXT NOT NULL,          -- 야후 기호 (^KS11, ^IXIC, KRW=X ...)
+    trade_date  DATE NOT NULL,
+    close       NUMERIC(18, 4),         -- 지수값 또는 환율 (원/달러)
+    change_pct  NUMERIC(10, 4),         -- 전날 대비 등락률 (%)
+    PRIMARY KEY (symbol, trade_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_index_date ON market_index (trade_date DESC);
 """
 
 
@@ -334,7 +372,8 @@ def main() -> None:
                  WHERE t.table_schema = 'public'
                    AND t.table_name IN
                        ('ticker', 'daily_price', 'ingest_log', 'financial', 'dart_log',
-                        'paper_trade', 'paper_cash', 'disclosure')
+                        'paper_trade', 'paper_cash', 'disclosure',
+                        'market_index')
                  ORDER BY table_name;
                 """
             )
@@ -350,11 +389,12 @@ def main() -> None:
         "paper_trade": "모의투자 매매",
         "paper_cash": "모의투자 예수금",
         "disclosure": "공시 목록",
+        "market_index": "지수·환율",
     }
     for name, col_count in tables:
         print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count:,}개)")
 
-    expected = 8
+    expected = 9
     if len(tables) == expected:
         print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
         print("  자동 생성 API 로는 아무도 표를 읽거나 고칠 수 없게 잠갔습니다.")

@@ -533,8 +533,29 @@ a { color: inherit; text-decoration: none; }
 .tl-m { display: block; font-size: .75rem; color: var(--ink-3);
         line-height: 1.55; margin-top: 2px; }
 
+/* ── 지수·환율 한 줄 ─────────────────────────────────────── */
+/* ★ 옆으로 넘기지 않고 줄바꿈합니다 ★
+     다섯 개를 한 줄에 넣으면 390px 화면에서 마지막 것이 숫자 중간에
+     잘립니다. 넘길 수 있다는 것을 아무도 모르고, 잘린 숫자는 화면이
+     깨진 것처럼 보입니다. 두 줄로 접히는 편이 낫습니다. */
+.idx {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px;
+}
+.idx-i { display: flex; align-items: baseline; gap: 5px; flex: 0 0 auto; }
+.idx-k { font-size: .72rem; color: var(--ink-3); }
+.idx-v { font-size: .8rem; font-weight: 600; color: var(--ink-2); }
+.idx-c { font-size: .72rem; font-weight: 600; }
+
+/* 달러 종목의 원화 어림값 한 줄 */
+.fx-note {
+  margin: 6px 0 0; font-size: .76rem; line-height: 1.6; color: var(--ink-3);
+}
+.fx-note b { color: var(--ink-2); }
+
 /* ── 목록 좁히기 (업종·종류) ──────────────────────────────── */
 .picks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 0; }
+/* 업종 이름은 '반도체(집적회로)' 처럼 길어서 한 줄을 다 씁니다 */
+.pick.wide { grid-column: 1 / -1; }
 .pick {
   min-height: var(--tap); padding: 8px 30px 8px 12px;
   font-size: 15px;            /* 16px 미만이어도 select 는 아이폰이 확대하지 않습니다 */

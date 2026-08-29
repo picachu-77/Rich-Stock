@@ -17,6 +17,21 @@ export const num = (v: number | null | undefined, digits = 0): string =>
 export const won = (v: number | null | undefined, digits = 0): string =>
   v === null || v === undefined || Number.isNaN(v) ? "" : `${num(v, digits)}원`;
 
+/**
+ * 시세 한 줄. 나라마다 돈 단위가 달라서 기호를 함께 붙입니다.
+ *
+ * 미국 종목은 달러가 진짜 시세입니다. 원화 값은 그날 환율로 바꾼
+ * 어림값이라, 그것만 보여주면 실제로 주문할 때 나오는 숫자와 달라
+ * 헷갈립니다.
+ */
+export const price = (
+  v: number | null | undefined,
+  currency = "KRW",
+): string => {
+  if (v === null || v === undefined || Number.isNaN(v)) return "";
+  return currency === "USD" ? `$${num(v, 2)}` : num(v);
+};
+
 /** 부호가 중요한 값(등락률·수익률)은 + 를 붙여 방향이 바로 보이게 합니다. */
 export const signed = (v: number | null | undefined, digits = 2): string => {
   if (v === null || v === undefined || Number.isNaN(v)) return "";
@@ -56,9 +71,17 @@ export const tone = (v: number | null | undefined): string =>
  *
  * 한국 증시는 하루에 오르내릴 수 있는 폭이 ±30% 로 정해져 있습니다.
  * 그 끝에 닿은 것은 보통 일이 아니라서 따로 표시해 줍니다.
- * (다른 나라 증시에는 없는 규칙이라 이 화면에만 있는 표시입니다)
+ *
+ * ★ 미국 종목에는 이 표시를 쓰면 안 됩니다 ★
+ *   미국 증시에는 이런 상·하한이 없습니다. 하루에 40% 오르는 일이
+ *   실제로 있고, 그것을 '상한가' 라고 부르면 틀린 말입니다.
+ *   그래서 돈 단위가 원인 종목에만 붙입니다.
  */
-export const limitHit = (v: number | null | undefined): "up" | "down" | null => {
+export const limitHit = (
+  v: number | null | undefined,
+  currency = "KRW",
+): "up" | "down" | null => {
+  if (currency !== "KRW") return null;
   if (v === null || v === undefined || Number.isNaN(v)) return null;
   if (v >= 29.5) return "up";
   if (v <= -29.5) return "down";

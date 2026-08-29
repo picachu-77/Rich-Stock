@@ -29,6 +29,10 @@ export type ListStock = {
   kind: string;
   /** 업종 이름. ETF 는 회사가 아니라 업종이 없어 null 입니다. */
   sector: string | null;
+  /** 돈 단위. 한국 종목은 KRW, 미국 종목은 USD 입니다. */
+  currency: string;
+  /** 상장된 나라 돈으로 본 종가. 미국 종목만 채워집니다. */
+  close_local: number | null;
   close: number | null;
   change_pct: number | null;
   market_cap: number | null;
@@ -46,8 +50,15 @@ export type Stock = {
   name: string;
   market: string;
   kind: string;
+  /** 돈 단위. 한국 종목은 KRW, 미국 종목은 USD 입니다. */
+  currency: string;
+  /** 업종 이름 (미국 종목은 야후 분류, 한국 종목은 아래 peers 에서 씁니다) */
+  sector: string | null;
   trade_date: string;
+  /** 종가 — 늘 원(KRW)입니다. 미국 종목은 그날 환율로 바꾼 값입니다. */
   close: number | null;
+  /** 상장된 나라 돈으로 본 종가. 미국 종목만 채워집니다. */
+  close_local: number | null;
   change_pct: number | null;
   volume: number | null;
   market_cap: number | null;
@@ -80,7 +91,7 @@ export async function getStocks(): Promise<ListStock[]> {
     .map(
       (p, i) => `
       LEFT JOIN LATERAL (
-        SELECT dp.close FROM daily_price dp
+        SELECT COALESCE(dp.close_local, dp.close) AS close FROM daily_price dp
          WHERE dp.code = t.code
            AND dp.trade_date <= c.trade_date - INTERVAL '${p.interval}'
            AND dp.trade_date >= c.trade_date - INTERVAL '${p.interval}'
@@ -97,14 +108,15 @@ export async function getStocks(): Promise<ListStock[]> {
   const rows = await sql.unsafe(`
     WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price)
     SELECT t.code, t.name, t.market, t.kind,
-           t.sector_code,
-           c.trade_date, c.close, c.change_pct, c.market_cap,
+           t.sector_code, t.sector_name, t.currency,
+           c.trade_date, c.close, c.close_local, c.change_pct, c.market_cap,
            c.per, c.div_yield,
            r0.close AS past0, r1.close AS past1
       FROM ticker t
       CROSS JOIN bound b
       JOIN LATERAL (
-        SELECT p.trade_date, p.close, p.change_pct, p.market_cap, p.per, p.div_yield
+        SELECT p.trade_date, p.close, p.close_local, p.change_pct,
+               p.market_cap, p.per, p.div_yield
           FROM daily_price p
          WHERE p.code = t.code
            AND p.trade_date >= b.last_d - INTERVAL '30 days'
@@ -123,6 +135,10 @@ export async function getStocks(): Promise<ListStock[]> {
   return rows.map((r: Record<string, unknown>) => {
     const close = toNum(r.close);
     const cap = toNum(r.market_cap);
+    // 수익률은 그 나라 돈 기준으로 잽니다. 원화로 재면 환율 움직임까지
+    // 섞여서 '이 회사가 얼마나 올랐나' 가 흐려집니다. 하루 등락률도
+    // 달러 기준으로 저장하고 있어, 여기만 원화로 재면 앞뒤가 안 맞습니다.
+    const base = toNum(r.close_local) ?? close;
     return {
       code: String(r.code),
       name: String(r.name),
@@ -132,13 +148,23 @@ export async function getStocks(): Promise<ListStock[]> {
       change_pct: toNum(r.change_pct),
       // 원 단위로 들어 있어 억원으로 바꿉니다.
       market_cap: cap === null ? null : Math.round(cap / 1e8),
-      // 업종 이름은 서버에서 만들어 보냅니다. 코드를 보내고 브라우저에서
-      // 바꾸면 업종 대응표(4KB)를 휴대폰이 함께 받아야 합니다.
-      sector: r.kind === "ETF" ? null : sectorName((r.sector_code as string) ?? null),
+      // 코드를 보내고 브라우저에서 바꾸면 업종 대응표(4KB)를 휴대폰이
+      // 함께 받아야 합니다. 그래서 서버에서 이름까지 만들어 보냅니다.
+      // 업종 이름은 서버에서 만들어 보냅니다.
+      //   한국 종목 : 업종코드(한국표준산업분류) → 이름
+      //   미국 종목 : 그 코드가 없어서, 야후가 준 업종 이름을 그대로
+      sector:
+        r.kind === "ETF"
+          ? null
+          : r.sector_code
+            ? sectorName(r.sector_code as string)
+            : ((r.sector_name as string) ?? null),
+      currency: String(r.currency ?? "KRW"),
+      close_local: toNum(r.close_local),
       per: toNum(r.per),
       div_yield: toNum(r.div_yield),
-      ret1m: pct(close, toNum(r.past0)),
-      ret1y: pct(close, toNum(r.past1)),
+      ret1m: pct(base, toNum(r.past0)),
+      ret1y: pct(base, toNum(r.past1)),
     };
   });
 }
@@ -147,8 +173,11 @@ export type PricePoint = { d: string; c: number };
 
 /** 종목 하나의 과거 종가 (차트용). */
 export async function getHistory(code: string): Promise<PricePoint[]> {
+  // 미국 종목은 달러로 그립니다. 화면 맨 위 시세가 달러인데 차트만
+  // 원화로 그리면 같은 화면에서 두 숫자가 어긋납니다. 환율이 움직인
+  // 날에는 주가가 그대로여도 차트가 꺾여서 더 헷갈립니다.
   const rows = await sql`
-    SELECT trade_date, close
+    SELECT trade_date, COALESCE(close_local, close) AS close
       FROM daily_price
      WHERE code = ${code} AND close IS NOT NULL
      ORDER BY trade_date
@@ -169,7 +198,7 @@ export async function getStock(code: string): Promise<Stock | null> {
   const joins = PERIODS.map(
     (p, i) => `
       LEFT JOIN LATERAL (
-        SELECT dp.close FROM daily_price dp
+        SELECT COALESCE(dp.close_local, dp.close) AS close FROM daily_price dp
          WHERE dp.code = $1
            AND dp.trade_date <= c.trade_date - INTERVAL '${p.interval}'
            AND dp.trade_date >= c.trade_date - INTERVAL '${p.interval}'
@@ -183,15 +212,16 @@ export async function getStock(code: string): Promise<Stock | null> {
     `
     WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price)
     SELECT t.code, t.name, t.market, t.kind,
-           c.trade_date, c.close, c.change_pct, c.volume, c.market_cap,
+           t.currency, t.sector_code, t.sector_name,
+           c.trade_date, c.close, c.close_local, c.change_pct, c.volume, c.market_cap,
            c.per, c.pbr, c.div_yield,
            f.roe, f.debt_ratio, f.op_margin,
            ${picks}
       FROM ticker t
       CROSS JOIN bound b
       JOIN LATERAL (
-        SELECT p.trade_date, p.close, p.change_pct, p.volume, p.market_cap,
-               p.per, p.pbr, p.div_yield
+        SELECT p.trade_date, p.close, p.close_local, p.change_pct,
+               p.volume, p.market_cap, p.per, p.pbr, p.div_yield
           FROM daily_price p
          WHERE p.code = $1
            AND p.trade_date >= b.last_d - INTERVAL '30 days'
@@ -218,8 +248,16 @@ export async function getStock(code: string): Promise<Stock | null> {
     name: String(r.name),
     market: String(r.market),
     kind: String(r.kind),
+    currency: String(r.currency ?? "KRW"),
+    sector:
+      r.kind === "ETF"
+        ? null
+        : r.sector_code
+          ? sectorName(r.sector_code as string)
+          : ((r.sector_name as string) ?? null),
     trade_date: new Date(r.trade_date as string).toISOString().slice(0, 10),
     close,
+    close_local: toNum(r.close_local),
     change_pct: toNum(r.change_pct),
     volume: toNum(r.volume),
     market_cap: cap === null ? null : cap / 1e8,
@@ -229,10 +267,12 @@ export async function getStock(code: string): Promise<Stock | null> {
     roe: toNum(r.roe),
     debt_ratio: toNum(r.debt_ratio),
     op_margin: toNum(r.op_margin),
+    // 수익률은 그 나라 돈 기준입니다 (목록 화면과 같은 규칙).
     returns: PERIODS.map((_, i) => {
+      const base = toNum(r.close_local) ?? close;
       const past = toNum(r[`past${i}`]);
-      if (close === null || past === null || past === 0) return null;
-      return Math.round((close / past - 1) * 10000) / 100;
+      if (base === null || past === null || past === 0) return null;
+      return Math.round((base / past - 1) * 10000) / 100;
     }),
   };
 }

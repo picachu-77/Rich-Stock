@@ -54,7 +54,13 @@ export default function TrendTable({ rows }: { rows: Quarter[] }) {
                 <th key={`${q.year}-${q.quarter}`} scope="col">
                   <span className="n">{String(q.year).slice(2)}</span>
                   <br />
-                  {q.quarter === 4 ? "연간" : `${q.quarter === 2 ? "반기" : `${q.quarter}Q`}`}
+                  {q.quarter === 0
+                    ? "최근"
+                    : q.quarter === 4
+                      ? "연간"
+                      : q.quarter === 2
+                        ? "반기"
+                        : `${q.quarter}Q`}
                 </th>
               ))}
             </tr>
