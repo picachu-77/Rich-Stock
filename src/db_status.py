@@ -75,6 +75,23 @@ def main() -> None:
             conn, "SELECT count(*) FROM daily_price WHERE change_pct IS NULL;"
         )[0]
 
+        # ★ 죽은 줄 (다시 쓸 수 있는 자리) ★
+        #   PostgreSQL 은 줄을 고치거나 지울 때 원래 줄을 그 자리에 두고
+        #   '이제 안 씀' 표시만 합니다. 파일은 그대로 크지만, 그 자리는
+        #   새 줄이 다시 씁니다. 그래서 '남은 자리 49MB' 만 보면 실제보다
+        #   빠듯하게 읽힙니다. 등락률 57만 줄을 고친 뒤에는 특히 그렇습니다.
+        dead = fetch_all(
+            conn,
+            """
+            SELECT relname, n_live_tup, n_dead_tup,
+                   pg_relation_size(relid) AS heap
+              FROM pg_stat_user_tables
+             WHERE n_dead_tup > 0
+             ORDER BY n_dead_tup DESC
+             LIMIT 5;
+            """,
+        )
+
     used_mb = db_bytes / 1024 / 1024
     left_mb = FREE_LIMIT_MB - used_mb
     pct = used_mb / FREE_LIMIT_MB * 100
@@ -101,6 +118,22 @@ def main() -> None:
         )
     print()
 
+    # 죽은 줄이 차지한 자리. 파일 크기에는 잡히지만 새 줄이 다시 씁니다.
+    reusable_mb = 0.0
+    if dead:
+        print("  다시 쓸 수 있는 자리 (죽은 줄)")
+        for name, live, dead_n, heap in dead:
+            share = dead_n / (live + dead_n) if (live + dead_n) else 0
+            mb = heap / 1024 / 1024 * share
+            reusable_mb += mb
+            print(f"    {name:<14}{dead_n:>12,}줄{mb:>10,.0f}MB")
+        if reusable_mb >= 1:
+            print(f"    → 실제로 쓸 수 있는 자리는 "
+                  f"{_mb(left_mb)} 이 아니라 약 {_mb(left_mb + reusable_mb)} 입니다.")
+            print("    (지우거나 고친 자리는 새 줄이 다시 씁니다. 다만 파일")
+            print("     자체는 작아지지 않아 '쓰는 중' 숫자는 그대로입니다)")
+        print()
+
     print("  시세")
     print(f"    보유 기간 : {first_d} ~ {last_d}  (거래일 {days:,}일)")
     print(f"    줄 수     : {price_rows:,}건")
@@ -113,17 +146,22 @@ def main() -> None:
         # 크기를 시세 줄 수로 나누면, 공시·재무 몫까지 시세에 얹혀서
         # 남은 날이 터무니없이 짧게 나옵니다.
         mb_per_row = (price_total_bytes / 1024 / 1024) / price_rows
-        days_left = left_mb / (mb_per_row * ROWS_PER_DAY)
+        # 죽은 줄이 남긴 자리도 새 줄이 쓰므로 함께 셉니다.
+        days_left = (left_mb + reusable_mb) / (mb_per_row * ROWS_PER_DAY)
         print("  언제 꽉 차나 (지금 속도로 시세만 쌓일 때)")
         print(f"    하루 {ROWS_PER_DAY:,}줄씩 늘면 약 {days_left:,.0f}일 뒤")
         print(f"    (거래일 기준이라 실제로는 약 {days_left / 21:,.1f}개월)")
         if days_left < 90:
             print()
             print("    [!] 얼마 남지 않았습니다. 줄일 방법:")
+            print("        · 오래된 시세를 성기게 만들기 (6개월 넘은 것은 주 1회만)")
+            print("          → 3년 그래프는 그대로 두고 줄 수만 3분의 1로")
             print("        · 오래된 시세를 지우기 (3년치 → 2년치)")
-            print("        · 공시를 1년치만 남기기")
+            print("        · 공시에서 정기보고서 빼기")
     elif left_mb <= 0:
-        print("  [!] 한도를 넘었습니다. 저장이 실패하기 시작합니다.")
+        print("  [!] 한도를 넘었습니다.")
+        print("      Supabase 무료 등급은 500MB 를 넘으면 창고를 '읽기 전용'")
+        print("      으로 바꿉니다. 화면은 그대로 열리지만 수집이 멈춥니다.")
     print("=" * 62)
 
 
