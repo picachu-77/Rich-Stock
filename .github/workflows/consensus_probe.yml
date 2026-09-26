@@ -1,0 +1,51 @@
+# =============================================================
+#  한경컨센서스 정찰 — 화면이 어떻게 생겼는지 보기만 합니다
+# =============================================================
+#  아무것도 저장하지 않습니다. 창고에 손대지 않습니다.
+#  받아온 화면의 구조만 기록에 찍습니다.
+#
+#  왜 필요한가: 한경컨센서스는 공식 창구(API)가 없어서 화면을 읽어야
+#  하는데, 개발하는 쪽 컴퓨터에서는 바깥 접속이 막혀 있어 화면을 볼 수가
+#  없습니다. 깃허브 서버는 볼 수 있으니 여기서 대신 봅니다.
+# =============================================================
+
+name: 한경컨센서스 정찰
+
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "어느 칸 (company / industry / market / economy)"
+        required: false
+        default: "company"
+      all:
+        description: "네 칸 모두 보려면 yes"
+        required: false
+        default: "yes"
+      days:
+        description: "며칠치를 불러볼지"
+        required: false
+        default: "7"
+
+jobs:
+  probe:
+    name: 정찰
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 코드 내려받기
+        uses: actions/checkout@v5
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: 정찰
+        env:
+          TZ: Asia/Seoul
+        run: |
+          ARGS="--kind ${{ github.event.inputs.kind }} --days ${{ github.event.inputs.days }}"
+          if [ "${{ github.event.inputs.all }}" = "yes" ]; then ARGS="$ARGS --all"; fi
+          python -m src.consensus_probe $ARGS
