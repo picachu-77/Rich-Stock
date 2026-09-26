@@ -100,7 +100,7 @@ export default async function Home() {
           <>
             <div className="sec-h">
               <h2>오늘 리포트</h2>
-              <Link href="/reports" className="sec-more">더 보기</Link>
+              <Link href="/reports" className="sec-more">모두 보기</Link>
             </div>
             <ReportList items={reports} showName empty="" />
           </>

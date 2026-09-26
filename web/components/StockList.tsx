@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ListStock } from "@/lib/stocks";
 import { chosungOf, scoreOf } from "@/lib/search";
-import { eok, limitHit, num, price, railWidth, signed, tone } from "@/lib/format";
+import { eok, limitHit, num, price, signed, tone } from "@/lib/format";
 
 type SortKey = "시가총액" | "많이 오른" | "많이 내린" | "1년 수익률" | "PER 낮은" | "배당 높은";
 
@@ -271,21 +271,27 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
                     ? (price(s.close_local, "USD") || "—")
                     : (s.close === null ? "—" : num(s.close))}
                 </div>
-                <div className={`row-chg n ${dir}`}>
-                  {signed(s.change_pct)}{s.change_pct !== null && "%"}
+                {/* 등락률은 알약으로. 목록을 훑을 때 오르내림이 한눈에
+                    들어옵니다 — 진짜 증권 앱들이 쓰는 모양입니다. */}
+                <div className="row-chg">
+                  {lim && (
+                    <span className={`limit ${lim}`}>
+                      {lim === "up" ? "상한가" : "하한가"}
+                    </span>
+                  )}
+                  <span className={`pill n ${dir}`}>
+                    {s.change_pct === null ? "—" : `${signed(s.change_pct)}%`}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* 가운데가 0. 오르면 오른쪽, 내리면 왼쪽으로 자랍니다.
-                방향을 색과 위치 두 가지로 보여주므로, 색 구분이 어려운
-                분도 어느 쪽인지 알 수 있습니다. */}
-            <div className="rail" aria-hidden="true">
-              {s.change_pct !== null && Math.abs(s.change_pct) >= 0.005 && (
-                <i className={dir} style={{ width: `${railWidth(s.change_pct)}%` }} />
-              )}
-              {lim && <span className={`limit ${lim}`}>{lim === "up" ? "상한가" : "하한가"}</span>}
-            </div>
+            {/* 등락 막대를 뺐습니다.
+                알약이 방향과 크기를 이미 말해주고, +·− 부호가 색과
+                따로 방향을 알려줍니다(색 구분이 어려운 분도 읽힙니다).
+                막대까지 두면 0.05% 짜리가 얼룩처럼 찍혀서 목록이
+                지저분해집니다. 종목 상세 화면에는 그대로 둡니다 —
+                거기는 한 종목만 크게 보는 자리라 크기가 뜻이 있습니다. */}
           </Link>
         );
       })}

@@ -36,6 +36,12 @@
   --down-bar:    #2d6be0;
   --flat:        #6b7178;
 
+  /* 등락 딱지의 옅은 바탕. 진짜 앱들이 등락률을 알약 모양으로 두는데,
+     글자색만 바꾸면 작은 글씨가 묻히고 바탕까지 옅게 깔면 또렷해집니다. */
+  --up-soft:     #fdeceb;
+  --down-soft:   #eaf0fd;
+  --flat-soft:   #f1f1ee;
+
   --tap:         48px;
   --gap:         12px;
   --radius:      14px;
@@ -66,6 +72,9 @@
     --down:      #6fa0ff;
     --down-bar:  #6fa0ff;
     --flat:      #868c94;
+    --up-soft:   rgba(255, 107, 98, .14);
+    --down-soft: rgba(111, 160, 255, .14);
+    --flat-soft: #22252c;
 
     /* 어두운 곳에서는 그림자가 안 보입니다. 대신 카드를 바탕보다
        조금 밝게 두는 것으로 '떠 있음' 을 냅니다. */
@@ -127,7 +136,7 @@ a { color: inherit; text-decoration: none; }
    한눈에 들어와야 합니다. */
 .head h1 {
   margin: 0;
-  font-size: 1.45rem;
+  font-size: 1.72rem;
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1.25;
@@ -247,7 +256,7 @@ a { color: inherit; text-decoration: none; }
 }
 .row {
   display: block;
-  padding: 13px 14px 0;
+  padding: 13px 14px 12px;
   border-bottom: 1px solid var(--rule);
 }
 .rows .row:last-child { border-bottom: 0; }
@@ -265,7 +274,7 @@ a { color: inherit; text-decoration: none; }
 .row-code { font-size: .74rem; color: var(--ink-3); flex: 0 0 auto; }
 
 .row-px  { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
-.row-chg { font-size: .84rem; font-weight: 700; margin-top: 1px; }
+.row-chg { margin-top: 3px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
 
 .row-sub {
   display: flex; flex-wrap: wrap; gap: 0 12px;
@@ -640,8 +649,27 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* 구역 머리의 '더 보기' */
-.sec-more { font-size: .76rem; color: var(--ink-3); text-decoration: none; }
+.sec-more {
+  font-size: .78rem; color: var(--ink-3); text-decoration: none;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.sec-more::after {
+  content: ""; width: 5px; height: 5px;
+  border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg); margin-bottom: 1px;
+}
 .sec-more:active { color: var(--ink); }
+
+/* 등락 알약 — 진짜 앱들이 쓰는 모양.
+   글자색만 바꾸면 작은 글씨가 묻힙니다. 옅은 바탕을 깔면
+   목록을 훑을 때 오르내림이 한눈에 들어옵니다. */
+.pill {
+  display: inline-block; padding: 3px 8px; border-radius: 999px;
+  font-size: .76rem; font-weight: 700; line-height: 1.35;
+}
+.pill.up   { color: var(--up);   background: var(--up-soft); }
+.pill.down { color: var(--down); background: var(--down-soft); }
+.pill.flat { color: var(--ink-3); background: var(--flat-soft); }
 
 /* ── 아래쪽 탭 ───────────────────────────────────────────── */
 /*  손가락이 닿는 곳이라 넉넉히 잡습니다. 아이폰은 화면 맨 아래에
@@ -680,20 +708,32 @@ a { color: inherit; text-decoration: none; }
 /* 탭이 내용을 가리지 않게 바닥을 띄웁니다 */
 body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 
-/* ── 지수·환율 한 줄 ─────────────────────────────────────── */
-/* ★ 옆으로 넘기지 않고 줄바꿈합니다 ★
-     다섯 개를 한 줄에 넣으면 390px 화면에서 마지막 것이 숫자 중간에
-     잘립니다. 넘길 수 있다는 것을 아무도 모르고, 잘린 숫자는 화면이
-     깨진 것처럼 보입니다. 두 줄로 접히는 편이 낫습니다. */
+/* ── 지수·환율 ───────────────────────────────────────────── */
+/* 지수 하나를 한 칸으로 묶고 이름·값·등락을 세로로 쌓습니다.
+   한 줄에 죽 늘어놓으면 이름·값·등락이 뒤엉켜 읽기 어렵습니다.
+   칸으로 묶으면 눈이 하나씩 읽습니다.
+
+   ★ 이번엔 옆으로 넘깁니다 ★
+     전에는 줄바꿈으로 뒀습니다. 잘린 숫자가 화면이 깨진 것처럼
+     보였기 때문입니다. 칸 모양이 되면 경계가 분명해서 '옆에 더
+     있다' 가 그대로 읽힙니다. 마지막 칸을 일부러 살짝 걸치게
+     두어 넘길 수 있다는 것을 알립니다.                            */
 .idx {
-  display: flex; flex-wrap: wrap; gap: 4px 14px;
-  margin-top: 12px; padding-top: 11px;
+  display: flex; gap: 8px;
+  margin: 12px -16px 0; padding: 11px 16px 2px;
   border-top: 1px solid var(--rule);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
-.idx-i { display: flex; align-items: baseline; gap: 5px; flex: 0 0 auto; }
-.idx-k { font-size: .72rem; color: var(--ink-3); }
-.idx-v { font-size: .8rem; font-weight: 600; color: var(--ink-2); }
-.idx-c { font-size: .72rem; font-weight: 600; }
+.idx::-webkit-scrollbar { display: none; }
+.idx-i {
+  flex: 0 0 auto; min-width: 94px;
+  padding: 8px 10px; border-radius: 12px;
+  background: var(--surface-2);
+}
+.idx-k { display: block; font-size: .68rem; color: var(--ink-3); }
+.idx-v { display: block; font-size: .86rem; font-weight: 700; color: var(--ink); margin-top: 1px; }
+.idx-c { display: block; font-size: .7rem; font-weight: 700; margin-top: 1px; }
 
 /* 달러 종목의 원화 어림값 한 줄 */
 .fx-note {
