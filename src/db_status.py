@@ -62,6 +62,33 @@ def main() -> None:
         (price_total_bytes,) = fetch_all(
             conn, "SELECT pg_total_relation_size('daily_price');"
         )[0]
+        (price_heap_bytes,) = fetch_all(
+            conn, "SELECT pg_relation_size('daily_price');"
+        )[0]
+
+        # ★ 파일 크기를 줄 수로 나누면 안 됩니다 ★
+        #   오래된 시세를 정리한 뒤에는 파일이 그대로인 채 줄 수만
+        #   줄어듭니다. 그러면 '한 줄당 무게' 가 3배로 부풀어서 '26일 뒤
+        #   꽉 참' 같은 엉뚱한 답이 나옵니다. 실제로 그랬습니다.
+        #
+        #   그래서 줄 하나의 무게를 실제 줄에서 잽니다. 최근 것 2만 개를
+        #   재고, 줄 머리말(23바이트)과 색인 몫을 더합니다.
+        (avg_cols,) = fetch_all(
+            conn,
+            """
+            SELECT COALESCE(avg(pg_column_size(t.*)), 0) FROM (
+              SELECT * FROM daily_price ORDER BY trade_date DESC LIMIT 20000
+            ) t;
+            """,
+        )[0]
+        idx_share = (
+            (price_total_bytes - price_heap_bytes) / price_heap_bytes
+            if price_heap_bytes else 0
+        )
+        # 23바이트는 PostgreSQL 이 줄마다 붙이는 머리말입니다.
+        bytes_per_row = (float(avg_cols) + 23) * (1 + idx_share)
+
+        # 자료가 실제로 차지하는 무게와, 파일 안에 남은 빈자리
 
         (price_rows, days, first_d, last_d) = fetch_all(
             conn,
@@ -145,9 +172,17 @@ def main() -> None:
         # 시세 표가 실제로 차지하는 무게로 셈합니다. 데이터베이스 전체
         # 크기를 시세 줄 수로 나누면, 공시·재무 몫까지 시세에 얹혀서
         # 남은 날이 터무니없이 짧게 나옵니다.
-        mb_per_row = (price_total_bytes / 1024 / 1024) / price_rows
-        # 죽은 줄이 남긴 자리도 새 줄이 쓰므로 함께 셉니다.
-        days_left = (left_mb + reusable_mb) / (mb_per_row * ROWS_PER_DAY)
+        mb_per_row = bytes_per_row / 1024 / 1024
+        # 파일 안에 이미 비어 있는 자리. 새 줄이 여기부터 씁니다.
+        file_mb = price_total_bytes / 1024 / 1024
+        live_mb = mb_per_row * price_rows
+        hole_mb = max(file_mb - live_mb, 0)
+        days_left = (left_mb + reusable_mb + hole_mb) / (mb_per_row * ROWS_PER_DAY)
+        print("  시세 표 안쪽")
+        print(f"    파일 크기        {_mb(file_mb)}")
+        print(f"    자료가 쓰는 무게  {_mb(live_mb)}  (한 줄 {bytes_per_row:,.0f}바이트)")
+        print(f"    안에 빈 자리      {_mb(hole_mb)}  ← 새 줄이 여기부터 씁니다")
+        print()
         print("  언제 꽉 차나 (지금 속도로 시세만 쌓일 때)")
         print(f"    하루 {ROWS_PER_DAY:,}줄씩 늘면 약 {days_left:,.0f}일 뒤")
         print(f"    (거래일 기준이라 실제로는 약 {days_left / 21:,.1f}개월)")
