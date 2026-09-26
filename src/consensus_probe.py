@@ -110,6 +110,18 @@ def describe(html: str) -> None:
         if shown >= 2:
             break
 
+    # ★ 줄 하나를 통째로 ★
+    #   칸별 글자만 봐서는 보고서 번호가 어디 숨어 있는지 알 수 없습니다.
+    #   실제로 PDF 링크가 없는 줄을 통째로 버리고 있었습니다.
+    rows_raw = re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S | re.I)
+    data_rows = [r for r in rows_raw if re.search(r"<td", r, re.I)]
+    for n, r in enumerate(data_rows[:3], 1):
+        flat = re.sub(r"\s+", " ", r).strip()
+        print(f"  {n}번째 줄 원문 ({len(flat):,}자 중 앞 700자)")
+        print(f"    {flat[:700]}")
+        ids = re.findall(r"(\w*idx\w*)\s*[=:]\s*['\"]?(\d+)", r, re.I)
+        print(f"    번호로 보이는 것: {ids[:6] if ids else '없음'}")
+
     # ★ 검색칸(form) ★
     #   날짜 범위와 쪽 넘김을 어떤 이름으로 넘기는지는 여기에 적혀
     #   있습니다. 이걸 모르면 주소를 또 추측하게 됩니다.
