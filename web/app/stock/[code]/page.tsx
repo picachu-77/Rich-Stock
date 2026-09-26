@@ -14,7 +14,7 @@ import { getTrend } from "@/lib/trend";
 import * as 설명 from "@/lib/explain";
 import { readout } from "@/lib/readout";
 import { PERIODS } from "@/lib/periods";
-import { eok, limitHit, num, price, railWidth, signed, tone } from "@/lib/format";
+import { eok, limitHit, num, price, signed, tone } from "@/lib/format";
 
 export const revalidate = 3600;
 
@@ -42,6 +42,14 @@ export default async function StockPage({
   ]);
 
   const dir = tone(stock.change_pct);
+  // 아래 '숫자' 칸에 빈칸이 하나라도 있는가
+  const 빈칸있음 =
+    stock.market_cap === null ||
+    !(stock.per && stock.per > 0) ||
+    !stock.pbr ||
+    !stock.div_yield ||
+    stock.roe === null ||
+    stock.debt_ratio === null;
   const lim = limitHit(stock.change_pct, stock.currency);
   const 달러 = stock.currency === "USD";
 
@@ -69,12 +77,6 @@ export default async function StockPage({
           <span style={{ fontSize: ".76rem", color: "var(--ink-3)", marginLeft: "auto" }}>
             <span className="n">{stock.trade_date}</span> 기준
           </span>
-        </div>
-
-        <div className="rail" aria-hidden="true">
-          {stock.change_pct !== null && stock.change_pct !== 0 && (
-            <i className={dir} style={{ width: `${railWidth(stock.change_pct)}%` }} />
-          )}
         </div>
 
         {/* 미국 종목은 달러가 진짜 시세입니다. 원화는 그날 환율로 바꾼
@@ -221,12 +223,13 @@ export default async function StockPage({
           </>
         )}
 
+        {/* 빈칸의 뜻은 빈칸이 실제로 있을 때만 말합니다. 늘 적어두면
+            빈칸이 하나도 없는 종목에서도 읽어야 하는 글이 됩니다. */}
         <p className="foot">
           {달러
-            ? "야후 파이낸스 기준. 원화 값은 그날 환율로 바꾼 어림값입니다."
-            : "PER·PBR·배당은 한국거래소, ROE·부채비율은 DART 기준입니다."}{" "}
-          ETF 는 재무제표가 없어 빈칸입니다. 빈칸은 &lsquo;0&rsquo; 이 아니라
-          &lsquo;아직 자료가 없다&rsquo;는 뜻입니다.
+            ? "야후 파이낸스 기준"
+            : "PER·PBR·배당은 한국거래소, ROE·부채비율은 DART 기준"}
+          {빈칸있음 && " · 빈칸은 0이 아니라 아직 자료가 없다는 뜻입니다"}
         </p>
       </main>
     </div>

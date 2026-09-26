@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ListStock } from "@/lib/stocks";
 import { chosungOf, scoreOf } from "@/lib/search";
+import SectorPicker from "./SectorPicker";
 import { eok, limitHit, num, price, signed, tone } from "@/lib/format";
 
 type SortKey = "시가총액" | "많이 오른" | "많이 내린" | "1년 수익률" | "PER 낮은" | "배당 높은";
@@ -138,20 +139,13 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
 
         {!searching && (
           <div className="picks">
-            {/* 업종은 이름이 길어서 한 줄을 다 씁니다 */}
-            <select
-              className="pick wide"
+            {/* 업종은 150가지가 넘습니다. 펼쳐놓고 고르게 하면 손가락으로
+                한참 굴려야 해서, 찾는 칸이 붙은 창을 띄웁니다. */}
+            <SectorPicker
+              sectors={sectors}
               value={sector}
-              onChange={(e) => { setSector(e.target.value); setShown(PAGE); }}
-              aria-label="업종으로 좁히기"
-            >
-              <option value="">업종 전체</option>
-              {sectors.map(([name, n]) => (
-                <option key={name} value={name}>
-                  {name} ({n.toLocaleString("ko-KR")})
-                </option>
-              ))}
-            </select>
+              onChange={(next) => { setSector(next); setShown(PAGE); }}
+            />
             <select
               className="pick"
               value={country}
@@ -286,12 +280,12 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
               </div>
             </div>
 
-            {/* 등락 막대를 뺐습니다.
+            {/* 등락 막대는 여기도, 종목 상세에도 없습니다.
                 알약이 방향과 크기를 이미 말해주고, +·− 부호가 색과
                 따로 방향을 알려줍니다(색 구분이 어려운 분도 읽힙니다).
-                막대까지 두면 0.05% 짜리가 얼룩처럼 찍혀서 목록이
-                지저분해집니다. 종목 상세 화면에는 그대로 둡니다 —
-                거기는 한 종목만 크게 보는 자리라 크기가 뜻이 있습니다. */}
+                막대까지 두면 0.05% 짜리가 점 하나로 찍혀서 화면이
+                지저분해집니다. 크기를 제대로 보여주는 일은 눈금이 있는
+                차트가 합니다. */}
           </Link>
         );
       })}

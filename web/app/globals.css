@@ -311,28 +311,6 @@ a { color: inherit; text-decoration: none; }
 /* ★ 이 화면의 표시 — 등락 막대 ★
    가운데를 0 으로 두고, 오르면 오른쪽 내리면 왼쪽으로 자랍니다.
    목록을 훑으면 그날 장 전체가 한눈에 들어옵니다. */
-.rail {
-  position: relative;
-  height: 4px;
-  margin: 10px 0 11px;
-  background:
-    linear-gradient(to right,
-      transparent calc(50% - .5px),
-      var(--rule) calc(50% - .5px),
-      var(--rule) calc(50% + .5px),
-      transparent calc(50% + .5px));
-}
-.rail i {
-  position: absolute; top: 0; height: 4px;
-  min-width: 3px; border-radius: 2px;
-}
-.rail i.up   { left: 50%;  background: var(--up-bar); }
-.rail i.down { right: 50%; background: var(--down-bar); }
-/* 상한가·하한가 딱지는 막대 끝에 붙습니다 */
-.rail .limit { position: absolute; top: -7px; }
-.rail .limit.up   { left: calc(50% + 4px); }
-.rail .limit.down { right: calc(50% + 4px); }
-
 /* 상한가·하한가는 한국 증시에만 있는 일이라 따로 표시합니다 */
 .limit {
   font-size: .66rem; font-weight: 700;
@@ -498,8 +476,57 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface); color: var(--ink-2);
   padding: 14px; font-size: .88rem; margin: 12px 0;
 }
-.chart-cap { font-size: .78rem; color: var(--ink-2); margin: 8px 0 2px; }
-.chart-cap .nowrap { white-space: nowrap; }
+/* ── 시세 차트 ─────────────────────────────────────────────
+   짚었을 때와 안 짚었을 때가 같은 자리·같은 높이에서 바뀝니다.
+   높이가 달라지면 손가락을 끌 때 차트가 위아래로 튑니다.       */
+.chart-cap {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  min-height: 20px;
+  font-size: .78rem; color: var(--ink-3);
+  margin: 10px 0 4px;
+}
+.chart-cap b { font-size: .88rem; color: var(--ink); }
+.chart-cap b.up { color: var(--up); }
+.chart-cap b.down { color: var(--down); }
+
+/* 값 눈금이 들어갈 오른쪽 여백을 비워 둡니다. 선 위에 숫자를
+   겹쳐 놓으면 둘 다 읽기 어려워집니다. */
+.chart { position: relative; padding-right: 64px; }
+.chart svg {
+  display: block; width: 100%; height: auto;
+  touch-action: pan-y;          /* 세로 스크롤은 그대로 됩니다 */
+  border-radius: 8px;
+}
+.chart svg:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.chart-y {
+  position: absolute; right: 0;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: flex-start;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.chart-y i { font-style: normal; font-size: .62rem; color: var(--ink-3); }
+.chart-y b { font-size: .72rem; font-weight: 600; color: var(--ink-2); }
+
+.chart-x {
+  display: flex; justify-content: space-between;
+  padding-right: 64px;          /* 눈금 여백과 맞춥니다 */
+  margin-top: 4px;
+  font-size: .68rem; color: var(--ink-3);
+}
+
+.chart-legend {
+  display: flex; align-items: center; gap: 6px;
+  margin: 8px 0 0; font-size: .72rem; color: var(--ink-3);
+}
+.chart-legend i {
+  flex: 0 0 auto; width: 16px; height: 0;
+  border-top: 1px dashed var(--ink-3);
+}
+.chart-legend b { color: var(--ink-2); font-weight: 600; }
 .foot { font-size: .74rem; color: var(--ink-3); line-height: 1.65; margin: 18px 0 8px; }
 
 /* ── 뉴스 ──────────────────────────────────────────────────
@@ -768,6 +795,66 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .fx-note b { color: var(--ink-2); }
 
 /* ── 목록 좁히기 (업종·종류) ──────────────────────────────── */
+/* 업종 단추는 select 와 똑같이 생겨야 합니다 — 옆에 나란히 서 있는데
+   혼자 다르게 생기면 '누르면 다른 일이 일어나나?' 싶어집니다. */
+.pick.as-button { text-align: left; color: var(--ink-3); }
+.pick.as-button.chosen { color: var(--ink); font-weight: 600; }
+
+/* ── 아래에서 올라오는 창 (업종 고르기) ───────────────────── */
+.sheet-back {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(34, 40, 49, .5);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet {
+  width: 100%; max-width: 680px;
+  max-height: 82vh;
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 6px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+}
+.sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 0 8px;
+}
+.sheet-head h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.sheet-x {
+  width: var(--tap); height: var(--tap);
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 1rem; color: var(--ink-3);
+  background: none; border: 0; cursor: pointer;
+  margin-right: -12px;
+}
+.sheet-list {
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  margin: 8px -14px 0; padding: 0 14px;
+}
+.sheet-row {
+  position: relative;
+  width: 100%; min-height: var(--tap);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 0 8px 11px;
+  font: inherit; font-size: .9rem; color: var(--ink);
+  text-align: left;
+  background: none; border: 0; border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+.sheet-row b { font-size: .8rem; font-weight: 600; color: var(--ink-3); }
+.sheet-row.on { font-weight: 700; }
+/* 고른 업종은 왼쪽에 표시가 붙습니다. 굵기만으로는 훑을 때
+   어느 것이 켜져 있는지 놓치기 쉽습니다. */
+/* 자리를 차지하지 않게 띄워 붙입니다. flex 칸으로 끼워 넣으면
+   space-between 이 글자를 가운데로 밀어내서, 고른 줄만 다른 줄과
+   어긋나 보입니다. */
+.sheet-row.on::before {
+  content: ""; position: absolute;
+  left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 16px;
+  border-radius: 2px; background: var(--ink);
+}
+.sheet-none { padding: 22px 2px; font-size: .84rem; color: var(--ink-3); line-height: 1.7; }
+
 .picks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 0; }
 /* 업종 이름은 '반도체(집적회로)' 처럼 길어서 한 줄을 다 씁니다 */
 .pick.wide { grid-column: 1 / -1; }
