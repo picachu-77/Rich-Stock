@@ -277,6 +277,33 @@ export async function getStock(code: string): Promise<Stock | null> {
   };
 }
 
+/**
+ * 오른 종목·내린 종목 수.
+ *
+ * ★ 왜 따로 세는가 ★
+ *   전에는 첫 화면이 종목 4천 개를 전부 받아와서 그중 오른 것을
+ *   세었습니다. 막대 하나 그리려고 목록 전체를 휴대폰까지 보낸 셈입니다.
+ *   세는 일은 창고가 훨씬 잘합니다.
+ */
+export async function getBreadth(): Promise<{ up: number; down: number; total: number }> {
+  const rows = await sql`
+    WITH bound AS (SELECT max(trade_date) AS last_d FROM daily_price)
+    SELECT count(*) FILTER (WHERE c.change_pct > 0) AS up,
+           count(*) FILTER (WHERE c.change_pct < 0) AS down,
+           count(*)                                 AS total
+      FROM ticker t
+      CROSS JOIN bound b
+      JOIN LATERAL (
+        SELECT p.change_pct FROM daily_price p
+         WHERE p.code = t.code AND p.trade_date >= b.last_d - INTERVAL '30 days'
+         ORDER BY p.trade_date DESC LIMIT 1
+      ) AS c ON TRUE
+     WHERE t.is_active
+  `;
+  const r = rows[0] ?? {};
+  return { up: Number(r.up ?? 0), down: Number(r.down ?? 0), total: Number(r.total ?? 0) };
+}
+
 /** 자료가 언제까지 들어와 있는지. */
 export async function getLastDate(): Promise<string | null> {
   const rows = await sql`SELECT max(trade_date) AS d FROM daily_price`;

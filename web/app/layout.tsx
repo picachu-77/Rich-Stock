@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import TabBar from "@/components/TabBar";
 
 /**
  * 숫자 전용 글꼴.
@@ -20,9 +21,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "국내주식",
-  description: "코스피·코스닥 전 종목 시세와 수익률",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "국내주식" },
+  title: "주식",
+  description: "한국·미국 주식 시세·재무·공시·리포트와 모의투자",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "주식" },
   manifest: "/manifest.webmanifest",
 };
 
@@ -43,7 +44,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko" className={mono.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <TabBar />
+      </body>
     </html>
   );
 }

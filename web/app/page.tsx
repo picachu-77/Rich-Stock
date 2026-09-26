@@ -1,57 +1,62 @@
 import Link from "next/link";
-import StockList from "@/components/StockList";
 import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
 import IndexStrip from "@/components/IndexStrip";
-import { getLastDate, getStocks } from "@/lib/stocks";
+import ReportList from "@/components/ReportList";
+import { getBreadth, getLastDate } from "@/lib/stocks";
 import { getMarketNews, newsReady } from "@/lib/news";
 import { getRecentDisclosures } from "@/lib/disclosures";
 import { getIndexes } from "@/lib/indexes";
+import { getRecentReports } from "@/lib/reports";
 import { num } from "@/lib/format";
 
 /**
- * 첫 화면 — 종목 목록.
+ * 홈 — 오늘 시장이 어땠나.
  *
- * 시세는 하루에 한 번(밤 11시)만 바뀝니다. 그래서 이 화면을 미리 만들어
- * 두고 1시간마다 다시 만듭니다. 볼 때마다 데이터베이스에 묻지 않습니다.
+ * ★ 종목 목록을 여기서 뺐습니다 ★
+ *   전에는 이 화면 아래로 3,900줄이 이어졌습니다. '오늘 어땠나' 만
+ *   보려던 사람도 종목 전체를 받아야 했습니다. 목록은 종목 탭으로
+ *   옮기고, 여기는 한눈에 들어오는 것만 둡니다.
+ *
+ * ★ 오른 종목 수를 창고에서 셉니다 ★
+ *   막대 하나 그리려고 4천 개를 받아오지 않습니다. 세는 일은
+ *   창고가 훨씬 잘합니다.
  */
 export const revalidate = 3600;
 
 export default async function Home() {
-  const [stocks, lastDate, disclosures, news, indexes] = await Promise.all([
-    getStocks(),
-    getLastDate(),
-    getRecentDisclosures(4),
-    newsReady() ? getMarketNews(3) : Promise.resolve([]),
-    getIndexes(),
-  ]);
+  const [breadth, lastDate, disclosures, news, indexes, reports] =
+    await Promise.all([
+      getBreadth(),
+      getLastDate(),
+      getRecentDisclosures(3),
+      newsReady() ? getMarketNews(3) : Promise.resolve([]),
+      getIndexes(),
+      getRecentReports(3, "기업"),
+    ]);
 
-  // 오늘 장이 어땠는지 한 줄. 숫자를 하나하나 읽기 전에 분위기가 먼저
-  // 들어옵니다. 오른 종목이 많은 날인지 내린 날인지가 이 한 줄에 있습니다.
-  const up = stocks.filter((s) => (s.change_pct ?? 0) > 0).length;
-  const down = stocks.filter((s) => (s.change_pct ?? 0) < 0).length;
-  const moved = up + down;
+  const moved = breadth.up + breadth.down;
 
   return (
     <div className="wrap">
       <header className="head">
         <div className="head-top">
-          <h1>한국·미국 주식</h1>
+          <h1>오늘 시장</h1>
           {lastDate && <span className="head-date n">{lastDate}</span>}
         </div>
 
         {moved > 0 && (
           <div className="breadth">
-            <span className="up">▲ <b className="n">{num(up)}</b></span>
+            <span className="up">▲ <b className="n">{num(breadth.up)}</b></span>
             <div
               className="breadth-bar"
               role="img"
-              aria-label={`오른 종목 ${num(up)}개, 내린 종목 ${num(down)}개`}
+              aria-label={`오른 종목 ${num(breadth.up)}개, 내린 종목 ${num(breadth.down)}개`}
             >
-              <i className="b-up" style={{ width: `${(up / moved) * 100}%` }} />
-              <i className="b-down" style={{ width: `${(down / moved) * 100}%` }} />
+              <i className="b-up" style={{ width: `${(breadth.up / moved) * 100}%` }} />
+              <i className="b-down" style={{ width: `${(breadth.down / moved) * 100}%` }} />
             </div>
-            <span className="down"><b className="n">{num(down)}</b> ▼</span>
+            <span className="down"><b className="n">{num(breadth.down)}</b> ▼</span>
           </div>
         )}
 
@@ -61,15 +66,13 @@ export default async function Home() {
       </header>
 
       <main>
-        {/* 연습으로 가는 길. 목록 위에 둡니다 — 아래에 두면 3,900줄 뒤라
-            아무도 닿지 못합니다. */}
-        <Link href="/practice" className="go-practice">
-          <b>모의투자</b>
-          <span>진짜 돈 없이 사고파는 연습 — 왜 샀는지 적어두고 되돌아보기</span>
+        <Link href="/stocks" className="go-practice">
+          <b>종목 보러 가기</b>
+          <span>
+            한국·미국 <b className="n">{num(breadth.total)}</b>개 — 업종·나라로 좁혀 찾기
+          </span>
         </Link>
 
-        {/* 무슨 일이 있었는지 먼저 읽고 종목을 봅니다.
-            목록은 3,900줄이라 아래에 두면 아무도 닿지 못합니다. */}
         <div className="sec-h" style={{ marginTop: 4 }}>
           <h2>최근 공시</h2>
           <span>전자공시(DART)</span>
@@ -79,6 +82,16 @@ export default async function Home() {
           empty="최근 일주일 사이 올라온 공시가 없습니다."
           showName
         />
+
+        {reports.length > 0 && (
+          <>
+            <div className="sec-h">
+              <h2>오늘 리포트</h2>
+              <Link href="/reports" className="sec-more">더 보기</Link>
+            </div>
+            <ReportList items={reports} showName empty="" />
+          </>
+        )}
 
         {newsReady() && (
           <>
@@ -95,11 +108,10 @@ export default async function Home() {
           </>
         )}
 
-        <div className="sec-h">
-          <h2>전체 종목</h2>
-          <span className="n">{num(stocks.length)}개</span>
-        </div>
-        <StockList stocks={stocks} />
+        <Link href="/practice" className="go-practice" style={{ marginTop: 18 }}>
+          <b>모의투자</b>
+          <span>진짜 돈 없이 사고파는 연습 — 왜 샀는지 적어두고 되돌아보기</span>
+        </Link>
       </main>
     </div>
   );

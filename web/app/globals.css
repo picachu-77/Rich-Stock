@@ -533,6 +533,107 @@ a { color: inherit; text-decoration: none; }
 .tl-m { display: block; font-size: .75rem; color: var(--ink-3);
         line-height: 1.55; margin-top: 2px; }
 
+/* ── 증권사 리포트 ───────────────────────────────────────── */
+.rp-list {
+  display: grid; gap: 1px; background: var(--rule);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 6px;
+}
+.rp {
+  display: block; background: var(--surface); padding: 12px 14px;
+  color: inherit; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.rp:active { background: var(--surface-2); }
+.rp-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.rp-name { font-size: .82rem; font-weight: 700; }
+.rp-title {
+  font-size: .9rem; line-height: 1.45; color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rp-sub {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-top: 5px; font-size: .74rem; color: var(--ink-3);
+}
+.rp-sub b { color: var(--ink-2); }
+
+/* 의견 딱지.
+   ★ 매수를 빨갛게 하지 않습니다 ★ 이 화면에서 빨강은 '올랐다' 입니다.
+   게다가 거의 다 매수라 온 화면이 빨개지면 아무 뜻도 없어집니다.
+   드문 것(매도·중립)만 눈에 띄게 합니다. */
+.rp-op {
+  font-size: .68rem; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--rule-2); color: var(--ink-3);
+}
+.rp-op.buy  { color: var(--ink-2); }
+.rp-op.hold { color: var(--ink); border-color: var(--ink-3); }
+.rp-op.sell { color: var(--down); border-color: var(--down); font-weight: 800; }
+.rp-op.none { color: var(--ink-3); border-style: dashed; }
+
+/* 의견 쏠림 막대 */
+.mix {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--radius); padding: 14px; margin: 4px 0 14px;
+}
+.mix-h { font-size: .78rem; color: var(--ink-3); margin-bottom: 8px; }
+.mix-bar {
+  display: flex; height: 9px; border-radius: 999px; overflow: hidden;
+  background: var(--surface-2);
+}
+.mix-bar i { display: block; height: 100%; }
+.m-buy  { background: var(--rule-2); }
+.m-hold { background: var(--ink-3); }
+.m-sell { background: var(--down); }
+.mix-k {
+  display: flex; gap: 14px; margin-top: 8px;
+  font-size: .76rem; color: var(--ink-3);
+}
+.mix-k b { color: var(--ink); }
+.mix-note {
+  margin: 10px 0 0; font-size: .78rem; line-height: 1.6; color: var(--ink-2);
+}
+
+/* 구역 머리의 '더 보기' */
+.sec-more { font-size: .76rem; color: var(--ink-3); text-decoration: none; }
+.sec-more:active { color: var(--ink); }
+
+/* ── 아래쪽 탭 ───────────────────────────────────────────── */
+/*  손가락이 닿는 곳이라 넉넉히 잡습니다. 아이폰은 화면 맨 아래에
+    홈 막대가 있어서, 그 높이(safe-area)를 더해야 탭이 가려지지
+    않습니다.                                                        */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 목록이 탭 밑으로 스쳐 지나갈 때 글자가 비쳐 보이지 않게 */
+  backdrop-filter: saturate(1.2);
+}
+.tab {
+  position: relative;      /* 켜진 표시(::before)를 이 안에 놓습니다 */
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; min-height: var(--tap); padding: 7px 0 6px;
+  color: var(--ink-3); text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-i { display: block; width: 23px; height: 23px; }
+.tab-i svg { width: 100%; height: 100%; display: block; }
+.tab-t { font-size: .68rem; letter-spacing: -.02em; }
+
+/* 켜진 탭. 색을 쓰지 않습니다 — 이 화면에서 진한 색은 늘 시세입니다.
+   대신 글자를 진하게 하고 위에 줄을 하나 올려 자리를 알려줍니다. */
+.tab.on { color: var(--ink); }
+.tab.on .tab-t { font-weight: 700; }
+.tab.on::before {
+  content: ""; position: absolute; margin-top: -7px;
+  width: 26px; height: 2px; border-radius: 2px; background: var(--ink);
+}
+.tab:active { background: var(--surface-2); }
+
+/* 탭이 내용을 가리지 않게 바닥을 띄웁니다 */
+body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+
 /* ── 지수·환율 한 줄 ─────────────────────────────────────── */
 /* ★ 옆으로 넘기지 않고 줄바꿈합니다 ★
      다섯 개를 한 줄에 넣으면 390px 화면에서 마지막 것이 숫자 중간에
@@ -593,7 +694,10 @@ a { color: inherit; text-decoration: none; }
 .go-practice:active { background: var(--surface-2); }
 @media (hover: hover) { .go-practice:hover { background: var(--surface-2); } }
 .go-practice:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.go-practice b { display: block; font-size: .95rem; }
+/* 첫 줄(제목)만 블록입니다. 설명줄 안의 <b> 까지 블록이 되면
+   '한국·미국 8개' 가 세 줄로 끊깁니다. 실제로 그랬습니다. */
+.go-practice > b { display: block; font-size: .95rem; }
+.go-practice span b { font-weight: 700; color: var(--ink-2); }
 .go-practice span { display: block; margin-top: 3px; font-size: .76rem; color: var(--ink-3); line-height: 1.5; }
 
 /* ── 모의투자 입력칸 ──────────────────────────────────────── */
