@@ -110,6 +110,14 @@ def opinion(raw: str) -> str | None:
     if not s or s in ("-", "--"):
         return None
     low = s.lower().replace(" ", "")
+    # ★ '의견 없음' 을 '중립' 으로 묶지 않습니다 ★
+    #   Not Rated 는 '보통이다' 가 아니라 '의견을 내지 않았다' 입니다.
+    #   중립에 섞으면 '중립도 꽤 있네' 로 잘못 읽힙니다. 화면에서 쏠림을
+    #   보여주는 것이 목적인데, 그러면 그 쏠림이 가려집니다.
+    if low in ("nr", "n/r", "notrated", "투자의견없음", "의견없음", "없음"):
+        return "의견없음"
+    if any(k in low for k in ("notrated", "not_rated", "투자의견없", "의견없")):
+        return "의견없음"
     if any(k in low for k in ("buy", "매수", "outperform", "overweight", "strongbuy")):
         return "매수"
     if any(k in low for k in ("hold", "중립", "neutral", "marketperform", "equalweight")):
