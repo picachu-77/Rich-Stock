@@ -45,9 +45,21 @@ export default async function Home() {
           {lastDate && <span className="head-date n">{lastDate}</span>}
         </div>
 
+        {/* 오늘의 얼굴. 이 화면의 주인공은 숫자라, 작은 글씨로 흘리지
+            않고 크게 세웁니다. 그 아래 지수를 붙여 '시장 전체가
+            그랬나' 를 한 카드 안에서 읽게 합니다. */}
         {moved > 0 && (
-          <div className="breadth">
-            <span className="up">▲ <b className="n">{num(breadth.up)}</b></span>
+          <div className="today">
+            <div className="breadth">
+              <span className="side">
+                <span className="k">오른 종목</span>
+                <span className="v up n">{num(breadth.up)}</span>
+              </span>
+              <span className="side r">
+                <span className="k">내린 종목</span>
+                <span className="v down n">{num(breadth.down)}</span>
+              </span>
+            </div>
             <div
               className="breadth-bar"
               role="img"
@@ -56,13 +68,16 @@ export default async function Home() {
               <i className="b-up" style={{ width: `${(breadth.up / moved) * 100}%` }} />
               <i className="b-down" style={{ width: `${(breadth.down / moved) * 100}%` }} />
             </div>
-            <span className="down"><b className="n">{num(breadth.down)}</b> ▼</span>
+            <span className="breadth-total">
+              오늘 움직인 <b className="n">{num(moved)}</b>개 · 전체{" "}
+              <b className="n">{num(breadth.total)}</b>개
+            </span>
+
+            {/* 종목 하나가 빠진 날, 시장 전체가 빠진 것인지 이 회사만
+                그런 것인지 알려면 기준선이 있어야 합니다. */}
+            <IndexStrip points={indexes} />
           </div>
         )}
-
-        {/* 종목 하나가 빠진 날, 시장 전체가 빠진 것인지 이 회사만
-            그런 것인지 알려면 기준선이 있어야 합니다. */}
-        <IndexStrip points={indexes} />
       </header>
 
       <main>

@@ -39,6 +39,15 @@
   --tap:         48px;
   --gap:         12px;
   --radius:      14px;
+  --radius-lg:   20px;
+
+  /* 살짝 떠 있는 느낌.
+     테두리 한 줄만 두르면 종이가 아니라 표처럼 보입니다. 아주 옅은
+     그림자를 얹으면 카드가 종이 위에 놓인 것처럼 보이고, 무엇이 한
+     덩어리인지가 테두리 없이도 읽힙니다. */
+  --lift: 0 1px 1px rgba(20, 22, 28, .04),
+          0 8px 20px -12px rgba(20, 22, 28, .16);
+  --lift-1: 0 1px 2px rgba(20, 22, 28, .05);
 }
 
 /* 어두운 곳에서 보실 때. 밤에 휴대폰으로 보는 일이 많습니다. */
@@ -57,6 +66,12 @@
     --down:      #6fa0ff;
     --down-bar:  #6fa0ff;
     --flat:      #868c94;
+
+    /* 어두운 곳에서는 그림자가 안 보입니다. 대신 카드를 바탕보다
+       조금 밝게 두는 것으로 '떠 있음' 을 냅니다. */
+    --lift:   0 1px 0 rgba(255, 255, 255, .04) inset,
+              0 10px 24px -16px rgba(0, 0, 0, .8);
+    --lift-1: 0 1px 0 rgba(255, 255, 255, .03) inset;
   }
 }
 
@@ -108,34 +123,47 @@ a { color: inherit; text-decoration: none; }
   padding: calc(14px + env(safe-area-inset-top, 0px)) 0 10px;
 }
 .head-top { display: flex; align-items: baseline; gap: 10px; }
+/* 화면 이름은 크게. 탭으로 옮겨 다니는 구조라 '지금 어디인지' 가
+   한눈에 들어와야 합니다. */
 .head h1 {
   margin: 0;
-  font-size: 1.06rem;
+  font-size: 1.45rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
 }
 .head-date { font-size: .78rem; color: var(--ink-3); margin-left: auto; }
 
-/* 오늘 장이 어땠는지 한 줄로. 숫자를 읽기 전에 분위기가 먼저 들어옵니다. */
-.breadth {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: .82rem;
-  color: var(--ink-2);
+/* ── 오늘 시장 카드 — 홈의 얼굴 ──────────────────────────────
+   이 화면의 주인공은 숫자입니다. 그래서 '몇 개가 올랐나' 를 작은
+   글씨로 흘리지 않고 크게 세웁니다. 색은 여기서도 시세뿐입니다.   */
+.today {
+  margin-top: 12px; padding: 16px 16px 14px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--lift);
 }
-.breadth b { font-weight: 700; }
+.breadth {
+  display: flex; align-items: flex-end; gap: 12px;
+}
+.breadth .side { flex: 1; }
+.breadth .side.r { text-align: right; }
+.breadth .k {
+  display: block; font-size: .72rem; color: var(--ink-3);
+  letter-spacing: -.01em; margin-bottom: 1px;
+}
+.breadth .v { display: block; font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
 .breadth .up   { color: var(--up); }
 .breadth .down { color: var(--down); }
+/* 전체 종목 수는 막대 아래 작게. 큰 숫자 둘 사이에 끼우면 셋 다
+   비슷한 무게로 보여서 무엇이 중요한지 흐려집니다. */
+.breadth-total {
+  display: block; margin-top: 7px; text-align: center;
+  font-size: .7rem; color: var(--ink-3);
+}
 .breadth-bar {
-  flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  overflow: hidden;
-  display: flex;
-  background: var(--rule);
-  min-width: 60px;
+  display: flex; height: 8px; margin-top: 12px;
+  border-radius: 999px; overflow: hidden; background: var(--surface-2);
 }
 .breadth-bar i { display: block; height: 100%; }
 .breadth-bar .b-up   { background: var(--up-bar); }
@@ -208,11 +236,21 @@ a { color: inherit; text-decoration: none; }
 /* ── 종목 한 줄 ───────────────────────────────────────────── */
 /* 왼쪽은 '무슨 종목인가', 오른쪽은 '얼마인가'.
    눈이 왼쪽에서 이름을 찾고 오른쪽에서 숫자만 훑을 수 있게 나눕니다. */
+/* 목록 덩어리. 마지막 줄의 밑줄은 지웁니다 — 카드 테두리와 겹쳐
+   두 줄로 보입니다. */
+.rows {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--lift);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
 .row {
   display: block;
-  padding: 13px 2px 0;
+  padding: 13px 14px 0;
   border-bottom: 1px solid var(--rule);
 }
+.rows .row:last-child { border-bottom: 0; }
 .row:active { background: var(--surface-2); }
 
 .row-grid { display: flex; align-items: flex-start; gap: 12px; }
@@ -439,17 +477,23 @@ a { color: inherit; text-decoration: none; }
    훑을 때 제목만 눈에 들어오게 합니다.
    한 줄 전체가 누르는 자리입니다. 제목 글자만 정확히 누르게 하면
    휴대폰에서 자꾸 빗나갑니다.                                  */
+/* 구역 머리.
+   ★ 이름과 출처를 붙여 쓰지 않습니다 ★
+     '최근 공시  전자공시(DART)' 처럼 한 줄에 나란히 두면 어디까지가
+     제목인지 흐려집니다. 제목은 크게, 출처는 그 아래 작게 둡니다. */
 .sec-h {
-  display: flex; align-items: baseline; gap: 8px;
-  margin: 22px 0 8px;
+  display: flex; align-items: baseline; gap: 10px;
+  margin: 26px 0 10px;
 }
 .sec-h h2 {
-  font-size: .95rem; font-weight: 700; margin: 0; letter-spacing: -.01em;
+  font-size: 1.08rem; font-weight: 800; margin: 0; letter-spacing: -.025em;
 }
-.sec-h span { font-size: .72rem; color: var(--ink-3); }
+.sec-h span { font-size: .74rem; color: var(--ink-3); margin-left: auto; }
+.sec-h a { margin-left: auto; }
 
 .news { list-style: none; margin: 0; padding: 0;
-        border: 1px solid var(--rule); border-radius: var(--radius);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--lift);
         overflow: hidden; background: var(--surface); }
 .news li + li { border-top: 1px solid var(--rule); }
 
@@ -536,7 +580,8 @@ a { color: inherit; text-decoration: none; }
 /* ── 증권사 리포트 ───────────────────────────────────────── */
 .rp-list {
   display: grid; gap: 1px; background: var(--rule);
-  border-radius: var(--radius); overflow: hidden; margin-bottom: 6px;
+  border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 6px;
+  box-shadow: var(--lift);
 }
 .rp {
   display: block; background: var(--surface); padding: 12px 14px;
@@ -572,8 +617,9 @@ a { color: inherit; text-decoration: none; }
 
 /* 의견 쏠림 막대 */
 .mix {
-  background: var(--surface); border: 1px solid var(--rule);
-  border-radius: var(--radius); padding: 14px; margin: 4px 0 14px;
+  background: var(--surface);
+  border-radius: var(--radius-lg); box-shadow: var(--lift);
+  padding: 16px; margin: 12px 0 14px;
 }
 .mix-h { font-size: .78rem; color: var(--ink-3); margin-bottom: 8px; }
 .mix-bar {
@@ -640,7 +686,9 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
      잘립니다. 넘길 수 있다는 것을 아무도 모르고, 잘린 숫자는 화면이
      깨진 것처럼 보입니다. 두 줄로 접히는 편이 낫습니다. */
 .idx {
-  display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px;
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  margin-top: 12px; padding-top: 11px;
+  border-top: 1px solid var(--rule);
 }
 .idx-i { display: flex; align-items: baseline; gap: 5px; flex: 0 0 auto; }
 .idx-k { font-size: .72rem; color: var(--ink-3); }
@@ -685,11 +733,24 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 
 /* 첫 화면에서 연습으로 가는 길 */
 .go-practice {
-  display: block; margin: 4px 0 18px; padding: 13px 15px;
+  display: block; margin: 14px 0 18px; padding: 15px 16px;
   min-height: var(--tap);
-  border: 1px solid var(--rule-2); border-radius: var(--radius);
+  border-radius: var(--radius-lg); box-shadow: var(--lift);
   background: var(--surface); color: inherit; text-decoration: none;
   -webkit-tap-highlight-color: transparent;
+  position: relative; padding-right: 36px;
+}
+/* 누를 수 있는 곳이라는 표시.
+   ★ 아래쪽 삼각형을 쓰면 안 됩니다 ★
+     그건 이 화면에서 '고르는 칸(select)' 의 표시입니다. 같은 모양을
+     쓰면 눌러서 넘어가는 곳인지 펼쳐지는 곳인지 헷갈립니다.
+     넘어가는 곳에는 오른쪽 화살표를 씁니다.                        */
+.go-practice::after {
+  content: ""; position: absolute; right: 17px; top: 50%;
+  width: 7px; height: 7px; margin-top: -4px;
+  border-right: 1.8px solid var(--ink-3);
+  border-bottom: 1.8px solid var(--ink-3);
+  transform: rotate(-45deg);
 }
 .go-practice:active { background: var(--surface-2); }
 @media (hover: hover) { .go-practice:hover { background: var(--surface-2); } }

@@ -85,7 +85,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
 
     if (query) {
       return 후보
-        .map((s) => ({ s, sc: scoreOf(query, s.name, s.code, chosung.get(s.code)) }))
+        .map((s) => ({ s, sc: scoreOf(query, s.name, s.code, chosung.get(s.code), s.sector) }))
         .filter((x) => x.sc > 0)
         .sort((a, b) => b.sc - a.sc || (b.s.market_cap ?? -1) - (a.s.market_cap ?? -1))
         .map((x) => x.s);
@@ -124,11 +124,11 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
             className="search"
             value={q}
             onChange={(e) => { setQ(e.target.value); setShown(PAGE); }}
-            placeholder="종목 찾기 — 이름 · 코드 · 초성"
+            placeholder="찾기 — 이름 · 코드 · 초성 · 업종"
             inputMode="search"
             enterKeyHint="search"
             autoComplete="off"
-            aria-label="종목 찾기. 이름, 여섯 자리 코드, 초성으로 찾을 수 있습니다."
+            aria-label="종목 찾기. 이름, 여섯 자리 코드, 초성, 업종 이름으로 찾을 수 있습니다."
           />
           {searching && (
             <button className="search-x" onClick={() => { setQ(""); setShown(PAGE); }}
@@ -226,10 +226,14 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
         <div className="empty">
           <b>찾은 종목이 없습니다</b>
           이름 일부나 여섯 자리 코드로 찾아보세요.
-          <br />초성으로도 찾을 수 있습니다. (예: ㅅㅅㅈㅈ)
+          <br />초성으로도 됩니다. (예: ㅅㅅㅈㅈ)
+          <br />업종 이름으로도 됩니다. (예: 반도체)
         </div>
       )}
 
+      {/* 줄들을 한 덩어리로 감쌉니다. 나머지 칸(공시·리포트)이 모두
+          카드라 목록만 맨바닥에 있으면 따로 노는 것처럼 보입니다. */}
+      <div className="rows">
       {list.map((s) => {
         const dir = tone(s.change_pct);
         const lim = limitHit(s.change_pct, s.currency);
@@ -285,6 +289,7 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
           </Link>
         );
       })}
+      </div>
 
       {shown < view.length && (
         <button className="more" onClick={() => setShown((n) => n + PAGE)}>
