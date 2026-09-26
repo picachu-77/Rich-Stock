@@ -213,6 +213,34 @@ def save_us_financials(conn, rows: list[tuple]) -> int:
     return bulk_upsert(conn, UPSERT_US_FIN_SQL, rows)
 
 
+# ── 증권사 리포트 저장 ────────────────────────────────────────
+#
+# 같은 보고서를 다시 받아도 줄이 늘지 않습니다. 목표가나 의견이 나중에
+# 고쳐지는 일이 있어 덮어씁니다.
+UPSERT_REPORT_SQL = """
+INSERT INTO report (report_idx, code, written_at, kind, title,
+                    target_price, opinion, analyst, house)
+VALUES %s
+ON CONFLICT (report_idx) DO UPDATE SET
+    code         = EXCLUDED.code,
+    title        = EXCLUDED.title,
+    target_price = EXCLUDED.target_price,
+    opinion      = EXCLUDED.opinion,
+    analyst      = EXCLUDED.analyst,
+    house        = EXCLUDED.house;
+"""
+
+
+def save_reports(conn, reports: list[dict]) -> int:
+    """증권사 리포트를 저장합니다."""
+    rows = [
+        (r["report_idx"], r["code"], r["written_at"], r["kind"], r["title"],
+         r["target_price"], r["opinion"], r["analyst"], r["house"])
+        for r in reports
+    ]
+    return bulk_upsert(conn, UPSERT_REPORT_SQL, rows)
+
+
 # ── 수집 진행 기록 ────────────────────────────────────────────
 def log_ingest(conn, trade_date: date, kind: str, status: str,
                row_count: int = 0, message: str | None = None) -> None:

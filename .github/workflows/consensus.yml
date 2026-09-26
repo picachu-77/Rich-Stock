@@ -1,0 +1,89 @@
+# =============================================================
+#  증권사 리포트 수집 (한경컨센서스)
+# =============================================================
+#  준비물은 DATABASE_URL 하나뿐입니다. 열쇠가 필요 없습니다.
+#
+#  ★ 처음 한 번 ★
+#    [Run workflow] 에서 dry_run 을 yes 로 두고 한 번 돌려,
+#    제대로 읽히는지 눈으로 확인하세요. 그다음 no 로 바꿔 저장합니다.
+#    1년치를 채우려면 days 에 365 를 넣습니다.
+#
+#  ★ 무엇을 저장하나 ★
+#    제목·목표주가·투자의견·작성자·증권사. 원문(PDF)은 받지 않고
+#    읽으러는 한경컨센서스로 보냅니다.
+# =============================================================
+
+name: 증권사 리포트 수집
+
+on:
+  schedule:
+    # 10:00 UTC = 19:00 KST. 그날 리포트가 다 올라온 뒤입니다.
+    - cron: "0 10 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "며칠치를 받을지 (처음 채울 때는 365)"
+        required: false
+        default: "7"
+      kinds:
+        description: "갈래 (CO=기업 IN=산업 MA=시장 DE=파생 EC=경제)"
+        required: false
+        default: "CO,IN,MA,EC"
+      dry_run:
+        description: "저장하지 않고 읽어낸 것만 보려면 yes"
+        required: false
+        default: "no"
+
+concurrency:
+  group: consensus
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: 리포트 수집
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: 코드 내려받기
+        uses: actions/checkout@v5
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 부품 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install psycopg2-binary python-dotenv
+
+      - name: 표가 준비돼 있는지 확인
+        if: github.event.inputs.dry_run != 'yes'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.create_tables
+
+      - name: 리포트 수집
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TZ: Asia/Seoul
+        run: |
+          DAYS="${{ github.event.inputs.days }}"
+          if [ -z "$DAYS" ]; then DAYS=7; fi
+          KINDS="${{ github.event.inputs.kinds }}"
+          if [ -z "$KINDS" ]; then KINDS="CO,IN,MA,EC"; fi
+          ARGS="--days $DAYS --kinds $KINDS"
+          if [ "${{ github.event.inputs.dry_run }}" = "yes" ]; then ARGS="$ARGS --dry-run"; fi
+          echo "실행: python -m src.consensus_collect $ARGS"
+          python -m src.consensus_collect $ARGS
+
+      - name: 실패 시 안내
+        if: failure()
+        run: |
+          echo "::error::리포트 수집이 실패했습니다."
+          echo "한경컨센서스는 공식 창구가 아니라 화면이 바뀌면 읽어내기가"
+          echo "깨집니다. '한경컨센서스 정찰' 을 돌려 화면 구조를 다시"
+          echo "확인해 보세요. 빠진 날짜는 다음 실행 때 채워집니다."

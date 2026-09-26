@@ -289,6 +289,39 @@ CREATE TABLE IF NOT EXISTS market_index (
 );
 
 CREATE INDEX IF NOT EXISTS idx_index_date ON market_index (trade_date DESC);
+
+-- ─────────────────────────────────────────────────────────────
+-- 11) 증권사 리포트 (한경컨센서스)
+-- ─────────────────────────────────────────────────────────────
+--    공시가 '회사가 스스로 신고한 것' 이라면, 리포트는 '밖에서 보는
+--    사람들이 어떻게 보는가' 입니다. 목표주가와 투자의견이 여기 있습니다.
+--
+--    ★ 원문은 저장하지 않습니다 ★
+--      제목·목표가·의견·작성자·출처만 두고, 읽으러는 한경컨센서스로
+--      보냅니다. 남의 보고서를 퍼 나르는 것이 아니라 '이런 것이 나왔다'
+--      만 알려주는 쪽입니다. 공시를 다루는 방식과 같습니다.
+--
+--    ★ 종목코드는 제목에서 뽑습니다 ★
+--      '삼성전자(005930) …' 처럼 제목에 코드가 들어 있습니다. 이름으로
+--      맞추면 한화/한화솔루션 같은 것이 섞이는데, 코드는 안 섞입니다.
+--      산업·시장·경제 리포트는 코드가 없어 비어 있습니다.
+--
+--    수집: python -m src.consensus_collect
+CREATE TABLE IF NOT EXISTS report (
+    report_idx   BIGINT PRIMARY KEY,   -- 한경컨센서스의 보고서 번호
+    code         TEXT,                 -- 종목코드 (기업 리포트만)
+    written_at   DATE NOT NULL,        -- 작성일
+    kind         TEXT NOT NULL,        -- 기업 / 산업 / 시장 / 파생 / 경제
+    title        TEXT NOT NULL,
+    target_price BIGINT,               -- 적정가격 (원). 없는 리포트도 많습니다
+    opinion      TEXT,                 -- 매수 / 중립 / 매도 로 맞춰 넣습니다
+    analyst      TEXT,                 -- 작성자
+    house        TEXT,                 -- 제공출처 (증권사)
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_code ON report (code, written_at DESC);
+CREATE INDEX IF NOT EXISTS idx_report_date ON report (written_at DESC);
 """
 
 
@@ -373,7 +406,7 @@ def main() -> None:
                    AND t.table_name IN
                        ('ticker', 'daily_price', 'ingest_log', 'financial', 'dart_log',
                         'paper_trade', 'paper_cash', 'disclosure',
-                        'market_index')
+                        'market_index', 'report')
                  ORDER BY table_name;
                 """
             )
@@ -390,11 +423,12 @@ def main() -> None:
         "paper_cash": "모의투자 예수금",
         "disclosure": "공시 목록",
         "market_index": "지수·환율",
+        "report": "증권사 리포트",
     }
     for name, col_count in tables:
         print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count:,}개)")
 
-    expected = 9
+    expected = 10
     if len(tables) == expected:
         print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
         print("  자동 생성 API 로는 아무도 표를 읽거나 고칠 수 없게 잠갔습니다.")
