@@ -14,18 +14,14 @@ name: 한경컨센서스 정찰
 on:
   workflow_dispatch:
     inputs:
-      kind:
-        description: "어느 칸 (company / industry / market / economy)"
+      url:
+        description: "어디서부터 훑을지"
         required: false
-        default: "company"
-      all:
-        description: "네 칸 모두 보려면 yes"
+        default: "http://consensus.hankyung.com/"
+      depth:
+        description: "몇 단계까지 링크를 따라갈지"
         required: false
-        default: "yes"
-      days:
-        description: "며칠치를 불러볼지"
-        required: false
-        default: "7"
+        default: "1"
 
 jobs:
   probe:
@@ -46,6 +42,6 @@ jobs:
         env:
           TZ: Asia/Seoul
         run: |
-          ARGS="--kind ${{ github.event.inputs.kind }} --days ${{ github.event.inputs.days }}"
-          if [ "${{ github.event.inputs.all }}" = "yes" ]; then ARGS="$ARGS --all"; fi
-          python -m src.consensus_probe $ARGS
+          python -m src.consensus_probe \
+            --url "${{ github.event.inputs.url }}" \
+            --depth "${{ github.event.inputs.depth }}"

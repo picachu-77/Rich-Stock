@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import re
 import time
+import urllib.parse
 import urllib.request
 from datetime import date, timedelta
 
@@ -122,30 +123,71 @@ def describe(html: str) -> None:
         print(f"  쪽 번호 : {sorted(set(int(p) for p in pages))[:12]}")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="한경컨센서스 정찰")
-    ap.add_argument("--kind", default="company", choices=list(KINDS))
-    ap.add_argument("--days", type=int, default=7)
-    ap.add_argument("--all", action="store_true", help="네 칸을 모두 봅니다")
-    args = ap.parse_args()
+def explore(start: str, depth: int = 1) -> None:
+    """
+    뿌리에서 시작해 링크를 훑습니다.
 
-    kinds = list(KINDS) if args.all else [args.kind]
-    for n, kind in enumerate(kinds):
-        label = KINDS[kind][0]
-        url = list_url(kind, days=args.days)
+    ★ 주소를 추측하지 않습니다 ★
+      처음엔 기억으로 /apps.analysis/analysis.list 를 적었다가 404 를
+      받았습니다. 없는 주소를 계속 찔러보는 것은 남의 서버에도 실례고
+      알아내는 데도 도움이 안 됩니다. 뿌리 화면이 알려주는 링크만
+      따라갑니다.
+    """
+    seen: set[str] = set()
+    todo = [(start, 0)]
+
+    while todo:
+        url, d = todo.pop(0)
+        if url in seen or d > depth:
+            continue
+        seen.add(url)
+
         print("=" * 66)
-        print(f" {label} 리포트")
+        print(f" [{d}단계] {url}")
         print("=" * 66)
-        print(f"  주소 : {url}")
         try:
             status, html = fetch(url)
-            print(f"  응답 : {status}")
-            describe(html)
         except Exception as e:
             print(f"  ! 받지 못했습니다: {type(e).__name__} {e}")
+            print()
+            continue
+
+        print(f"  응답 : {status}")
+        describe(html)
+
+        # 이 화면이 알려주는 링크들
+        hrefs = re.findall(r'href=["\']([^"\']+)["\']', html, re.I)
+        inner = []
+        for h in hrefs:
+            if h.startswith(("#", "javascript:", "mailto:")):
+                continue
+            full = urllib.parse.urljoin(url, h)
+            if urllib.parse.urlparse(full).netloc.endswith("hankyung.com"):
+                inner.append(full)
+
+        uniq = list(dict.fromkeys(inner))
+        print(f"  안쪽 링크 {len(uniq)}개 (앞 15개)")
+        for l in uniq[:15]:
+            print(f"    {l[:120]}")
+
+        # 보고서 목록으로 보이는 것만 다음 단계로
+        likely = [l for l in uniq
+                  if re.search(r"(list|analysis|report|consensus)", l, re.I)]
+        print(f"  목록으로 보이는 것 {len(likely)}개 (앞 5개를 따라갑니다)")
+        for l in likely[:5]:
+            print(f"    → {l[:120]}")
+            todo.append((l, d + 1))
         print()
-        if n < len(kinds) - 1:
-            time.sleep(2)     # 남의 서버입니다. 사이를 둡니다.
+        time.sleep(1.5)     # 남의 서버입니다
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="한경컨센서스 정찰")
+    ap.add_argument("--url", default=BASE + "/", help="어디서부터 훑을지")
+    ap.add_argument("--depth", type=int, default=1, help="몇 단계까지 따라갈지")
+    ap.parse_args
+    args = ap.parse_args()
+    explore(args.url, args.depth)
 
 
 if __name__ == "__main__":
