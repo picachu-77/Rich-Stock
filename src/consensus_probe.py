@@ -110,6 +110,33 @@ def describe(html: str) -> None:
         if shown >= 2:
             break
 
+    # ★ 검색칸(form) ★
+    #   날짜 범위와 쪽 넘김을 어떤 이름으로 넘기는지는 여기에 적혀
+    #   있습니다. 이걸 모르면 주소를 또 추측하게 됩니다.
+    forms = re.findall(r"<form[^>]*>(.*?)</form>", html, re.S | re.I)
+    heads = re.findall(r"<form[^>]*>", html, re.I)
+    print(f"  검색칸(form) {len(forms)}개")
+    for h, body in zip(heads, forms):
+        print(f"    {h[:140]}")
+        fields = re.findall(
+            r'<(input|select|textarea)[^>]*name=["\']([^"\']+)["\']([^>]*)>',
+            body, re.I,
+        )
+        for tag, name, rest in fields[:25]:
+            val = re.search(r'value=["\']([^"\']*)["\']', rest)
+            typ = re.search(r'type=["\']([^"\']*)["\']', rest)
+            print(f"        {tag:8} name={name:20} "
+                  f"type={typ.group(1) if typ else '-':10} "
+                  f"value={(val.group(1) if val else '')[:24]}")
+
+    # 쪽을 넘길 때 부르는 자바스크립트
+    calls = re.findall(r"javascript:(\w+)\(([^)]*)\)", html)
+    if calls:
+        uniq = list(dict.fromkeys(f"{n}({a})" for n, a in calls))
+        print(f"  자바스크립트 부름 {len(uniq)}가지 (앞 8개)")
+        for c in uniq[:8]:
+            print(f"    {c[:100]}")
+
     # 보고서 하나를 가리키는 링크가 어떻게 생겼는지
     links = re.findall(r'href="([^"]*(?:report_idx|downpdf|analysis)[^"]*)"', html, re.I)
     if links:
