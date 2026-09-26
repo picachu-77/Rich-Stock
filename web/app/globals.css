@@ -18,68 +18,85 @@
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  --paper:       #fcfcfa;
-  --surface:     #ffffff;
-  --surface-2:   #f4f4f1;
+  /* ── 색 ──────────────────────────────────────────────────
+     Color Hunt 에서 가장 오래 인기 있는 묶음을 바탕으로 잡았습니다.
+         #222831  #393E46  #948979  #DFD0B8
+     차가운 흰색 대신 따뜻한 중립으로 갑니다. 숫자를 오래 들여다보는
+     화면이라 눈이 덜 피로합니다.
 
-  --ink:         #15171c;
-  --ink-2:       #565c66;
-  --ink-3:       #6b7178;   /* 4.80:1 — 웹 접근성 기준(4.5:1) 통과 */
+     ★ 주황 계열 강조색은 쓰지 않았습니다 ★
+       Color Hunt 의 같은 묶음에 #FF5722·#F96D00 같은 주황이 자주
+       붙는데, 우리 상승색(#C92722)과 너무 가깝습니다. 목록에서
+       '오른 종목' 인 줄 알고 보게 됩니다.
 
-  --rule:        #e6e7e2;
-  --rule-2:      #d2d4ce;
+     ★ 대비는 숫자로 맞췄습니다 ★
+       따뜻한 바탕은 흰색보다 어두워서, 쓰던 빨강(#d62b24)이 4.41:1 로
+       기준(4.5:1) 아래로 떨어졌습니다. 조금 더 깊은 빨강으로 바꿨습니다.
+         #C92722  바탕 4.91:1 · 카드 5.44:1
+         #1b54c0  바탕 6.06:1 · 카드 6.72:1
+         #6E6558  바탕 5.09:1 · 카드 5.64:1                            */
+  --paper:       #f6f1e7;
+  --surface:     #fffdf8;
+  --surface-2:   #efe8da;
+
+  --ink:         #222831;   /* Color Hunt 그대로 */
+  --ink-2:       #4f5661;
+  --ink-3:       #6e6558;   /* #948979 계열을 대비에 맞게 깊게 */
+
+  --rule:        #e4dccb;
+  --rule-2:      #d2c8b4;
 
   /* 시세 — 화면에서 유일하게 진한 색 */
-  --up:          #d62b24;   /* 글자용 (대비 확보) */
-  --up-bar:      #e8443c;   /* 막대용 */
+  --up:          #c92722;
+  --up-bar:      #db3a32;
   --down:        #1b54c0;
   --down-bar:    #2d6be0;
-  --flat:        #6b7178;
+  --flat:        #6e6558;
 
-  /* 등락 딱지의 옅은 바탕. 진짜 앱들이 등락률을 알약 모양으로 두는데,
-     글자색만 바꾸면 작은 글씨가 묻히고 바탕까지 옅게 깔면 또렷해집니다. */
-  --up-soft:     #fdeceb;
-  --down-soft:   #eaf0fd;
-  --flat-soft:   #f1f1ee;
+  /* 등락 딱지의 옅은 바탕 */
+  --up-soft:     #f8e6e2;
+  --down-soft:   #e6ecf8;
+  --flat-soft:   #ebe4d6;
 
   --tap:         48px;
   --gap:         12px;
   --radius:      14px;
   --radius-lg:   20px;
 
-  /* 살짝 떠 있는 느낌.
-     테두리 한 줄만 두르면 종이가 아니라 표처럼 보입니다. 아주 옅은
-     그림자를 얹으면 카드가 종이 위에 놓인 것처럼 보이고, 무엇이 한
-     덩어리인지가 테두리 없이도 읽힙니다. */
-  --lift: 0 1px 1px rgba(20, 22, 28, .04),
-          0 8px 20px -12px rgba(20, 22, 28, .16);
-  --lift-1: 0 1px 2px rgba(20, 22, 28, .05);
+  --lift: 0 1px 1px rgba(34, 40, 49, .05),
+          0 8px 20px -12px rgba(34, 40, 49, .22);
+  --lift-1: 0 1px 2px rgba(34, 40, 49, .06);
 }
 
 /* 어두운 곳에서 보실 때. 밤에 휴대폰으로 보는 일이 많습니다. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper:     #0e0f12;
-    --surface:   #16181d;
-    --surface-2: #1d2027;
-    --ink:       #edeeea;
-    --ink-2:     #a2a8b0;
-    --ink-3:     #868c94;   /* 5.65:1 */
-    --rule:      #24272e;
-    --rule-2:    #333741;
-    --up:        #ff6b62;
+    /* Color Hunt 의 어두운 두 색을 그대로 씁니다 — #222831 · #393E46 */
+    --paper:     #222831;
+    --surface:   #2b313a;
+    --surface-2: #393e46;
+    --ink:       #eeeeee;   /* Color Hunt 그대로 */
+    --ink-2:     #aeb5be;
+    --ink-3:     #959da7;   /* 바탕 5.41:1 · 카드 4.78:1 */
+    --rule:      #353b45;
+    --rule-2:    #454b55;
+    --up:        #ff6b62;   /* 5.32:1 */
     --up-bar:    #ff6b62;
-    --down:      #6fa0ff;
+    --down:      #6fa0ff;   /* 5.75:1 */
     --down-bar:  #6fa0ff;
-    --flat:      #868c94;
-    --up-soft:   rgba(255, 107, 98, .14);
-    --down-soft: rgba(111, 160, 255, .14);
-    --flat-soft: #22252c;
+    --flat:      #959da7;
+    /* 어두울 때 딱지 바탕은 색으로 물들이지 않습니다.
+       물들이면 바탕이 글자색 쪽으로 밝아지면서 대비를 깎아먹습니다
+       — 상승 딱지가 3.82:1 까지 떨어졌습니다. 한 단계 파인 무채색으로
+       두면 상승 6.06:1 · 하락 6.56:1 이고, 카드와의 구분도 1.29 로
+       물들인 것(1.23)보다 오히려 또렷합니다.
+       색은 딱지가 아니라 숫자가 지닙니다. */
+    --up-soft:   #191d24;
+    --down-soft: #191d24;
+    --flat-soft: #191d24;
 
-    /* 어두운 곳에서는 그림자가 안 보입니다. 대신 카드를 바탕보다
-       조금 밝게 두는 것으로 '떠 있음' 을 냅니다. */
     --lift:   0 1px 0 rgba(255, 255, 255, .04) inset,
-              0 10px 24px -16px rgba(0, 0, 0, .8);
+              0 10px 24px -16px rgba(0, 0, 0, .85);
     --lift-1: 0 1px 0 rgba(255, 255, 255, .03) inset;
   }
 }
@@ -93,8 +110,12 @@ body {
   background: var(--paper);
   color: var(--ink);
   /* 한글은 기기에 있는 글꼴로. 내려받지 않으니 곧바로 뜹니다. */
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-    "Noto Sans KR", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  /* 한글 글꼴 — IBM Plex Sans KR (눈누에 올라와 있는 무료 글꼴).
+     숫자에 쓰는 IBM Plex Mono 와 같은 집안이라 뼈대·높이가 같습니다.
+     글자마다 쪼개 받기(unicode-range) 때문에 화면에 실제로 쓰인
+     글자 몫만 내려받습니다. 못 받으면 기기 글꼴로 그대로 뜹니다. */
+  font-family: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
   font-size: 16px;          /* 16px 미만이면 아이폰이 화면을 확대합니다 */
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -137,7 +158,7 @@ a { color: inherit; text-decoration: none; }
 .head h1 {
   margin: 0;
   font-size: 1.72rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 1.25;
 }
@@ -314,7 +335,7 @@ a { color: inherit; text-decoration: none; }
 
 /* 상한가·하한가는 한국 증시에만 있는 일이라 따로 표시합니다 */
 .limit {
-  font-size: .66rem; font-weight: 800;
+  font-size: .66rem; font-weight: 700;
   padding: 1px 6px; border-radius: 4px; margin-left: 6px;
   vertical-align: 1px;
 }
@@ -342,7 +363,7 @@ a { color: inherit; text-decoration: none; }
   display: inline-flex; align-items: center; gap: 4px;
   min-height: 44px; font-size: .86rem; font-weight: 600; color: var(--ink-2);
 }
-.px-big { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.px-big { font-size: 2.1rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
 .px-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 
 .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px;
@@ -495,7 +516,7 @@ a { color: inherit; text-decoration: none; }
   margin: 26px 0 10px;
 }
 .sec-h h2 {
-  font-size: 1.08rem; font-weight: 800; margin: 0; letter-spacing: -.025em;
+  font-size: 1.08rem; font-weight: 700; margin: 0; letter-spacing: -.025em;
 }
 .sec-h span { font-size: .74rem; color: var(--ink-3); margin-left: auto; }
 .sec-h a { margin-left: auto; }
@@ -621,7 +642,7 @@ a { color: inherit; text-decoration: none; }
 }
 .rp-op.buy  { color: var(--ink-2); }
 .rp-op.hold { color: var(--ink); border-color: var(--ink-3); }
-.rp-op.sell { color: var(--down); border-color: var(--down); font-weight: 800; }
+.rp-op.sell { color: var(--down); border-color: var(--down); font-weight: 700; }
 .rp-op.none { color: var(--ink-3); border-style: dashed; }
 
 /* 의견 쏠림 막대 */
@@ -726,10 +747,15 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   scrollbar-width: none;
 }
 .idx::-webkit-scrollbar { display: none; }
+/* 카드 안의 카드입니다. 한 단계 밝게 띄우는 대신 한 단계 파이게
+   두었습니다 — 밝은 칩 위에서는 등락 색이 흐려져서(어두울 때
+   상승색이 3.86:1 까지 떨어졌습니다) 시세를 읽기 어려워집니다.
+   바탕색(--paper)은 모든 색을 재서 맞춰둔 바탕이라 안전합니다. */
 .idx-i {
   flex: 0 0 auto; min-width: 94px;
   padding: 8px 10px; border-radius: 12px;
-  background: var(--surface-2);
+  background: var(--paper);
+  border: 1px solid var(--rule);
 }
 .idx-k { display: block; font-size: .68rem; color: var(--ink-3); }
 .idx-v { display: block; font-size: .86rem; font-weight: 700; color: var(--ink); margin-top: 1px; }

@@ -224,7 +224,7 @@ export default async function StockPage({
         <p className="foot">
           {달러
             ? "야후 파이낸스 기준. 원화 값은 그날 환율로 바꾼 어림값입니다."
-            : "PER·PBR·배당은 한국거래소, ROE·부채비율은 DART 기준입니다."}
+            : "PER·PBR·배당은 한국거래소, ROE·부채비율은 DART 기준입니다."}{" "}
           ETF 는 재무제표가 없어 빈칸입니다. 빈칸은 &lsquo;0&rsquo; 이 아니라
           &lsquo;아직 자료가 없다&rsquo;는 뜻입니다.
         </p>

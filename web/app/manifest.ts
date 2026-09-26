@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "코스피·코스닥 전 종목 시세와 수익률",
     start_url: "/",
     display: "standalone",
-    background_color: "#f7f8fa",
-    theme_color: "#f7f8fa",
+    background_color: "#f6f1e7",
+    theme_color: "#f6f1e7",
     lang: "ko",
   };
 }
