@@ -120,8 +120,19 @@ def opinion(raw: str) -> str | None:
 
 
 def _won(raw: str) -> int | None:
+    """
+    적정가격을 원 단위 숫자로.
+
+    ★ 0 은 '없음' 입니다 ★
+      목표주가를 안 내는 리포트(한국IR협의회 등)는 '-' 가 아니라 0 으로
+      옵니다. 그대로 두면 창고에 '목표주가 0원' 이 들어가고, 평균을 낼 때
+      끌어내립니다. 빈칸으로 둡니다.
+    """
     s = re.sub(r"[^\d]", "", raw or "")
-    return int(s) if s else None
+    if not s:
+        return None
+    v = int(s)
+    return v if v > 0 else None
 
 
 ROW_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S | re.I)
