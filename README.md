@@ -224,6 +224,35 @@ py -m venv .venv
 
 ---
 
+## 4-1. Vercel 설정에서 꼭 확인할 것
+
+**프레임워크(Framework Preset)를 반드시 `Next.js` 로 두세요.**
+
+이 저장소는 뿌리에 파이썬(`src/`, `requirements.txt`)이 있고 화면은
+`web/` 안의 Next.js 입니다. Vercel 에 프로젝트를 새로 연결하면 뿌리를
+먼저 보고 **파이썬 프로젝트로 자동 인식**하는 일이 생깁니다.
+
+그러면 아주 헷갈리는 방식으로 실패합니다.
+
+- 빌드는 `web/package.json` 을 보고 `next build` 를 제대로 돌려서
+  **끝까지 성공**합니다. 로그에 빨간 줄이 하나도 없습니다.
+- 그런데 결과물을 올리는 단계에서는 **프로젝트 설정(python)** 을 보고
+  파이썬식 경로를 기대합니다. Next.js 결과물이 안 맞으니 거절합니다.
+
+    errorCode : invalid_routes
+    errorStep : process-and-upload-routes
+
+빌드 로그만 보면 멀쩡해서 원인을 찾는 데 한참 걸립니다. 실제로 이것 때문에
+배포가 여러 번 막혔습니다. 설정 위치는
+
+    Vercel > 프로젝트 > Settings > Build and Deployment > Framework Settings
+
+Root Directory 는 `web`, Framework 는 `Next.js` 입니다.
+(`web/vercel.json` 의 `"framework": "nextjs"` 는 빌드에만 쓰이고
+프로젝트 설정을 덮어쓰지 않습니다)
+
+---
+
 ## 5. 파일 설명
 
 | 파일 | 역할 |
