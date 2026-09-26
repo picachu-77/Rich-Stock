@@ -6,7 +6,7 @@
 
 ```
    [한국 시세]  한국거래소 ─┐
-   [한국 재무]  DART 공시  ─┼→ 데이터베이스 →  화면(Next.js · Streamlit)
+   [한국 재무]  DART 공시  ─┼→ 데이터베이스 →  화면(Next.js)
    [미국·지수]  야후 파이낸스 ┘
 
   한국 시세 : 매일 밤 11시 자동 수집   (GitHub Actions)
@@ -166,11 +166,23 @@ py -m venv .venv
 
 ## 3. 화면 보기
 
+화면은 `web/` 안의 Next.js 이고 Vercel 에 올라가 있습니다. 휴대폰에서
+바로 열면 됩니다.
+
+내 컴퓨터에서 고쳐 보려면:
+
 ```powershell
-.venv\Scripts\streamlit.exe run app.py
+cd web
+npm install
+npm run dev
 ```
 
-웹브라우저가 자동으로 열립니다. 끄려면 명령창에서 `Ctrl+C`.
+`.env.local` 에 `DATABASE_URL` 을 넣어야 시세가 보입니다.
+끄려면 명령창에서 `Ctrl+C`.
+
+> 예전에는 Streamlit 화면(`app.py`)도 함께 있었습니다. 휴대폰으로만
+> 쓰게 되면서 걷어냈습니다 — 고칠 때마다 같은 것을 두 곳에 해야 했고,
+> Streamlit 쪽은 아무도 열지 않았습니다. 코드는 깃 기록에 남아 있습니다.
 
 **기능**
 - 전 종목 표 + 종목명/코드 검색
@@ -260,7 +272,6 @@ Root Directory 는 `web`, Framework 는 `Next.js` 입니다.
 | `.env` | 비밀 정보 (깃허브에 안 올라감) |
 | `.env.example` | `.env` 작성 견본 |
 | `requirements.txt` | 필요한 부품 목록 |
-| `app.py` | 웹 화면 |
 | `src/config.py` | 비밀값 읽기 |
 | `src/db.py` | 데이터베이스 접속 |
 | `src/create_tables.py` | 표 만들기 (1회) |
@@ -277,16 +288,8 @@ Root Directory 는 `web`, Framework 는 `Next.js` 입니다.
 | `src/dart_corpcode.py` | 종목코드 ↔ DART 회사코드 대응표 |
 | `src/financial_collect.py` | 재무지표 수집 (분기 1회) |
 | `src/check.py` | 설정 점검 도구 |
-| `src/ui_korean.py` | 화면의 영문 UI 한글화 · 조사(은/는, 이/가) 붙이기 |
-| `src/ui_style.py` | 화면 꾸미기(CSS) |
-| `src/ui_table.py` | 표에서 '값 없음' 을 빈칸으로 · 자릿수 구분기호 |
-| `src/search.py` | 종목 검색 (이름 · 코드 · 초성) |
-| `src/valuation.py` | 밸류에이션 밴드 (지금 싼 편인가) |
-| `src/fin_trend.py` | 재무 추세 (매출·이익이 늘고 있나) |
 | `src/disclosure.py` | 공시 분류 (회사가 어디로 가는지) |
 | `src/disclosure_collect.py` | 공시 모으기 |
-| `src/paper.py` | 모의투자 계산 (평균단가 · 손익 · 알림) |
-| `src/practice.py` | 모의투자를 '연습' 으로 만들기 (단계 · 복기 · 습관 점수) |
 | `.github/workflows/setup.yml` | 표가 바뀌면 자동으로 만들기 |
 | `.github/workflows/backfill.yml` | 과거 시세 채우기 (누를 때만) |
 | `.github/workflows/daily.yml` | 매일 시세 자동 실행 |
@@ -448,51 +451,6 @@ DART 하루 한도는 20,000건이라 여유가 많습니다.
 
 ---
 
-## 7. 화면을 인터넷에 올리기 (Streamlit Community Cloud · 무료)
-
-내 컴퓨터가 꺼져 있어도 휴대폰으로 볼 수 있게 됩니다.
-
-### 준비물
-GitHub 계정만 있으면 됩니다. 코드는 이미 올라가 있어야 합니다.
-
-### 순서
-
-1. https://share.streamlit.io 접속 → **Continue with GitHub** 으로 로그인
-2. **Create app** → **Deploy a public app from GitHub** 선택
-3. 아래처럼 채웁니다
-
-   | 칸 | 값 |
-   |---|---|
-   | Repository | `picachu-77/Rich-Stock` |
-   | Branch | `main` |
-   | Main file path | `app.py` |
-
-4. **Advanced settings** 를 펼치고 **Secrets** 칸에 아래 한 줄을 넣습니다.
-   (`.env` 의 DATABASE_URL 값을 **따옴표로 감싸서** 붙여넣으세요)
-
-   ```toml
-   DATABASE_URL = "postgresql://...여기에 Neon 연결 문자열..."
-   ```
-
-   > `.env` 와 달리 여기서는 **따옴표가 필요합니다.** 형식이 다릅니다(TOML).
-   > 거래소 아이디·비밀번호는 넣지 마세요. 화면은 거래소에 접속하지 않습니다.
-
-5. **Deploy** 클릭 → 3~5분 기다리면 주소가 나옵니다
-
-### ⚠️ 공개 범위 주의
-
-Streamlit Community Cloud 의 앱은 **기본이 전체 공개**입니다.
-주소를 아는 사람은 누구나 볼 수 있습니다.
-
-나만 보려면 배포 후:
-**앱 화면 우측 하단 Manage app → Settings → Sharing** 에서
-공개 범위를 제한하고, 볼 사람의 이메일을 직접 등록하세요.
-
-### 알아둘 점
-- 무료 플랜은 **아무도 안 보면 앱이 잠듭니다.** 다시 열면 30초쯤 뒤 깨어납니다.
-- 코드를 깃허브에 새로 올리면 앱이 자동으로 갱신됩니다.
-
----
 
 ## 8. 알아두실 점
 
@@ -524,10 +482,6 @@ DART 는 회사 단위로 공시하므로 삼성전자우(005935)에는 별도 �
 유료 플랜으로 올려야 합니다. 매일 약 0.6MB 씩 늘어납니다.
 
 **화면의 영어 메뉴는 한글로 바꿔치기한 것입니다.**
-Streamlit 이 표 머리글 메뉴("Sort ascending" 등)를 영어로 그리는데 이를 한글로
-바꾸는 공식 설정이 없습니다. `src/ui_korean.py` 가 화면에 뜬 뒤 글자를 바꿉니다.
-Streamlit 이 업데이트되어 일부가 다시 영어로 보이면, 그 파일의 사전에 한 줄
-추가하면 됩니다.
 
 ---
 

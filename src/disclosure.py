@@ -13,30 +13,23 @@
     "유상증자 결정"       → 돈이 필요하다 (내 지분은 묽어진다)
     "자기주식 취득"       → 주가가 싸다고 회사 스스로 판단했다
 
-  이 파일은 공시 제목을 다섯 갈래로 나눠서, 최근 이 회사가 어느 쪽 일을
-  많이 했는지 보여줍니다.
+  이 파일은 공시 제목을 갈래로 나누는 일만 합니다. 수집기
+  (disclosure_collect.py)가 저장할 때 쓰고, 보여주는 일은 화면 쪽
+  (web/lib/disclosures.ts)이 맡습니다.
 
 한계 (화면에도 적습니다)
   제목만 보고 나누기 때문에 속뜻까지는 알 수 없습니다.
   '유상증자' 도 공장을 짓기 위한 것이면 좋은 신호일 수 있고, 빚을 갚기
   위한 것이면 나쁜 신호입니다. 어느 쪽인지는 공시 원문을 읽어야 합니다.
   그래서 화면에서 DART 원문으로 바로 갈 수 있게 해뒀습니다.
+
+역사
+  예전에는 이 파일이 읽기·요약까지 했습니다(load_disclosures 등).
+  Streamlit 화면이 쓰던 것이고, 지금은 화면 쪽에서 직접 읽습니다.
+  수집기가 화면 도구(streamlit)를 불러오고 있어서 걷어냈습니다.
 """
 
 from __future__ import annotations
-
-import warnings
-
-import pandas as pd
-import streamlit as st
-
-from src.db import get_conn
-
-warnings.filterwarnings(
-    "ignore",
-    message="pandas only supports SQLAlchemy connectable",
-    category=UserWarning,
-)
 
 
 # ── 공시를 나누는 기준 ────────────────────────────────────────
@@ -143,7 +136,10 @@ def classify(report_nm: str) -> str:
     제목에서 띄어쓰기와 괄호를 지운 뒤 맞춰봅니다.
     DART 제목은 "주요사항보고서(유상증자결정)" 처럼 괄호가 붙는 일이 많습니다.
     """
-    if not report_nm or pd.isna(report_nm):
+    # pandas 의 NaN 도 받아냅니다. 예전에는 pd.isna 를 썼는데, 이 파일
+    # 하나 때문에 pandas 를 불러오게 됩니다. NaN 은 자기 자신과 다르다는
+    # 성질로 충분히 가려낼 수 있습니다.
+    if report_nm is None or report_nm != report_nm or not report_nm:
         return OTHER["key"]
 
     text = str(report_nm)
@@ -155,114 +151,3 @@ def classify(report_nm: str) -> str:
             if word.replace("·", "").replace(" ", "") in text:
                 return cat["key"]
     return OTHER["key"]
-
-
-# ── 데이터 읽기 ───────────────────────────────────────────────
-@st.cache_data(ttl=600, show_spinner=False)
-def load_disclosures(code: str, months: int = 12) -> pd.DataFrame:
-    """한 종목의 최근 공시를 최신순으로 가져옵니다."""
-    sql = f"""
-        SELECT rcept_no, rcept_dt, report_nm, category
-          FROM disclosure
-         WHERE code = %(code)s
-           AND rcept_dt >= (CURRENT_DATE - INTERVAL '{int(months)} months')
-         ORDER BY rcept_dt DESC, rcept_no DESC;
-    """
-    cols = ["rcept_no", "rcept_dt", "report_nm", "category"]
-    try:
-        with get_conn() as conn:
-            df = pd.read_sql(sql, conn, params={"code": code})
-    except Exception:  # noqa: BLE001
-        # 공시 표가 아직 없어도 다른 화면은 정상 동작해야 합니다.
-        return pd.DataFrame(columns=cols)
-
-    if df.empty:
-        return pd.DataFrame(columns=cols)
-
-    df["rcept_dt"] = pd.to_datetime(df["rcept_dt"])
-    # 저장할 때 분류해 두지만, 예전 자료를 위해 비어 있으면 지금 계산합니다.
-    df["category"] = [
-        c if isinstance(c, str) and c else classify(n)
-        for c, n in zip(df["category"], df["report_nm"])
-    ]
-    return df
-
-
-def has_table() -> bool:
-    """공시 표가 만들어져 있는지 확인합니다."""
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT to_regclass('public.disclosure');")
-                return cur.fetchone()[0] is not None
-    except Exception:  # noqa: BLE001
-        return False
-
-
-# ── 방향 읽기 ─────────────────────────────────────────────────
-def counts_by_category(df: pd.DataFrame) -> pd.DataFrame:
-    """갈래별로 몇 건인지 셉니다. (많은 순)"""
-    if df.empty:
-        return pd.DataFrame(columns=["갈래", "건수"])
-    c = df["category"].value_counts().reset_index()
-    c.columns = ["갈래", "건수"]
-    return c
-
-
-def direction_lines(df: pd.DataFrame, months: int = 12) -> list[str]:
-    """
-    최근 공시를 보고 '이 회사가 지금 무엇을 하고 있는지' 문장으로 정리합니다.
-
-    정기 보고서는 정해진 때에 내는 것이라 방향과 무관해서 뺍니다.
-    """
-    if df.empty:
-        return []
-
-    meaningful = df[~df["category"].isin(["정기보고", "기타"])]
-    if meaningful.empty:
-        return []
-
-    lines = []
-    for key, n in meaningful["category"].value_counts().items():
-        cat = BY_KEY.get(key, OTHER)
-        last = meaningful[meaningful["category"] == key].iloc[0]
-        lines.append(
-            f"{cat['아이콘']} **{cat['이름']}** {int(n):,}건 "
-            f"(가장 최근 {last['rcept_dt']:%Y-%m-%d} · {last['report_nm']})"
-        )
-    return lines
-
-
-def headline(df: pd.DataFrame, months: int = 12) -> str:
-    """
-    한 줄 요약. 가장 많았던 갈래를 기준으로 말합니다.
-
-    두 갈래가 겹칠 때가 진짜 중요합니다.
-      돈을 구하면서(조달) 동시에 돈을 쓰면(투자) → 키우려고 돈을 당겨오는 중
-      돈을 구하기만 하고 쓰지 않으면 → 왜 필요한지 확인이 필요
-    """
-    if df.empty:
-        return ""
-
-    keys = set(df[~df["category"].isin(["정기보고", "기타"])]["category"])
-    if not keys:
-        return f"최근 {months:,}개월 동안 정기 보고서 말고는 눈에 띄는 공시가 없습니다."
-
-    if "위험" in keys:
-        return ("⚠️ **조심할 공시가 있습니다.** 아래 목록에서 먼저 확인하세요. "
-                "제목만으로는 알 수 없으니 DART 원문을 꼭 읽어보시길 권합니다.")
-    if "투자" in keys and "조달" in keys:
-        return ("🏭💰 **돈을 끌어와서 사업을 키우는 중**으로 보입니다. "
-                "다만 끌어온 돈이 정말 그 투자에 쓰이는지는 원문에서 확인해야 합니다.")
-    if "투자" in keys:
-        return "🏭 **사업을 키우는 쪽**으로 움직이고 있습니다."
-    if "수주" in keys:
-        return "📄 **일감을 따내는 중**입니다. 앞으로 매출로 잡힐 계약이 있습니다."
-    if "조달" in keys:
-        return ("💰 **돈을 구하는 중**입니다. 무엇에 쓰려는 것인지 원문을 확인하세요. "
-                "유상증자·전환사채는 내 지분이 묽어집니다.")
-    if "주주환원" in keys:
-        return "🎁 **주주 몫을 챙기는 쪽**으로 움직이고 있습니다."
-    if "지배구조" in keys:
-        return "👤 **주인이 바뀌는 중**입니다. 회사 방향이 달라질 수 있습니다."
-    return ""

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import ReportList from "@/components/ReportList";
 import { getOpinionMix, getRecentReports } from "@/lib/reports";
 import { num } from "@/lib/format";
@@ -45,18 +44,11 @@ export default async function ReportsPage() {
             </div>
             <p className="mix-note">
               {mix.sell === 0 ? (
-                <>
-                  <b>매도 의견은 한 건도 없습니다.</b> 증권사 리포트는 원래
-                  그렇습니다 — 목표주가를 &apos;여기까지 오른다&apos; 로 읽으면
-                  안 되는 이유입니다. 무엇을 근거로 그렇게 봤는지가 숫자보다
-                  중요합니다.
-                </>
+                <><b>매도 의견은 한 건도 없습니다.</b> 목표주가를 &apos;여기까지
+                  오른다&apos; 로 읽으면 안 되는 이유입니다.</>
               ) : (
-                <>
-                  매도 의견은 <b className="n">{num(mix.sell)}건</b> 뿐입니다.
-                  증권사 리포트는 매수 쪽으로 크게 기웁니다. 목표주가보다
-                  <b> 무엇을 근거로 그렇게 봤는지</b> 를 보세요.
-                </>
+                <>매도는 <b className="n">{num(mix.sell)}건</b> 뿐입니다.
+                  목표주가보다 <b>왜 그렇게 봤는지</b> 를 보세요.</>
               )}
             </p>
           </div>
@@ -72,12 +64,7 @@ export default async function ReportsPage() {
           empty="아직 받아온 리포트가 없습니다. 깃허브 Actions 의 '증권사 리포트 수집' 을 한 번 돌려주세요."
         />
 
-        <p className="foot">
-          한경컨센서스(consensus.hankyung.com)가 모아둔 목록입니다. 원문은
-          각 증권사의 것이며 이 화면에는 제목·목표주가·의견만 두고 읽으러는
-          그쪽으로 보냅니다.{" "}
-          <Link href="/stocks">종목별로 보려면 종목 탭에서 종목을 고르세요.</Link>
-        </p>
+        <p className="foot">한경컨센서스에서 모은 목록입니다. 원문은 각 증권사의 것입니다.</p>
       </main>
     </div>
   );

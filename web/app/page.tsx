@@ -18,6 +18,11 @@ import { num } from "@/lib/format";
  *   보려던 사람도 종목 전체를 받아야 했습니다. 목록은 종목 탭으로
  *   옮기고, 여기는 한눈에 들어오는 것만 둡니다.
  *
+ * ★ 탭과 겹치는 배너를 뺐습니다 ★
+ *   '종목 보러 가기' 와 '모의투자' 큰 단추가 있었는데, 둘 다 아래
+ *   탭에 그대로 있습니다. 같은 곳으로 가는 길이 두 개씩 있으면
+ *   화면만 길어지고 어느 쪽이 맞는지 잠깐 생각하게 됩니다.
+ *
  * ★ 오른 종목 수를 창고에서 셉니다 ★
  *   막대 하나 그리려고 4천 개를 받아오지 않습니다. 세는 일은
  *   창고가 훨씬 잘합니다.
@@ -81,13 +86,6 @@ export default async function Home() {
       </header>
 
       <main>
-        <Link href="/stocks" className="go-practice">
-          <b>종목 보러 가기</b>
-          <span>
-            한국·미국 <b className="n">{num(breadth.total)}</b>개 — 업종·나라로 좁혀 찾기
-          </span>
-        </Link>
-
         <div className="sec-h" style={{ marginTop: 4 }}>
           <h2>최근 공시</h2>
           <span>전자공시(DART)</span>
@@ -122,11 +120,6 @@ export default async function Home() {
             />
           </>
         )}
-
-        <Link href="/practice" className="go-practice" style={{ marginTop: 18 }}>
-          <b>모의투자</b>
-          <span>진짜 돈 없이 사고파는 연습 — 왜 샀는지 적어두고 되돌아보기</span>
-        </Link>
       </main>
     </div>
   );

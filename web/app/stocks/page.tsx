@@ -1,6 +1,5 @@
 import StockList from "@/components/StockList";
 import { getLastDate, getStocks } from "@/lib/stocks";
-import { num } from "@/lib/format";
 
 /**
  * 종목 탭 — 전체 목록.
@@ -25,10 +24,8 @@ export default async function StocksPage() {
       </header>
 
       <main>
-        <div className="sec-h" style={{ marginTop: 2 }}>
-          <h2>전체 종목</h2>
-          <span className="n">{num(stocks.length)}개</span>
-        </div>
+        {/* '전체 종목 4,033개' 머리말을 뺐습니다. 바로 아래 개수 줄이
+            '4,033개 종목 · 시가총액 순' 이라고 다시 말합니다. */}
         <StockList stocks={stocks} />
       </main>
     </div>

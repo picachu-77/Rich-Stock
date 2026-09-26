@@ -191,8 +191,8 @@ export default async function StockPage({
 
         {달러 ? (
           <p className="foot" style={{ marginTop: 18 }}>
-            미국 회사는 한국 전자공시(DART) 대상이 아니라 이 화면에 공시가
-            없습니다. 미국 공시는 증권거래위원회(SEC)의 EDGAR 에 올라옵니다.
+            미국 회사는 한국 전자공시(DART) 대상이 아닙니다. 미국 공시는
+            SEC 의 EDGAR 에 올라옵니다.
           </p>
         ) : (
           <>
@@ -223,8 +223,8 @@ export default async function StockPage({
 
         <p className="foot">
           {달러
-            ? "시세·PER·PBR·배당수익률·ROE·부채비율은 야후 파이낸스 기준입니다. 원화 값은 그날 환율로 바꾼 어림값입니다."
-            : "PER·PBR·배당수익률은 한국거래소, ROE·부채비율은 DART 전자공시 기준입니다."}
+            ? "야후 파이낸스 기준. 원화 값은 그날 환율로 바꾼 어림값입니다."
+            : "PER·PBR·배당은 한국거래소, ROE·부채비율은 DART 기준입니다."}
           ETF 는 재무제표가 없어 빈칸입니다. 빈칸은 &lsquo;0&rsquo; 이 아니라
           &lsquo;아직 자료가 없다&rsquo;는 뜻입니다.
         </p>
