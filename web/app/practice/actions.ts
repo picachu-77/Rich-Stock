@@ -1,6 +1,27 @@
 "use server";
 
 /**
+ * ★ 이 파일에서 내보내는 함수 이름은 반드시 영문이어야 합니다 ★
+ *
+ *   한때 사기·팔기·돈넣기 처럼 한글로 지었습니다. 읽기에는 그쪽이
+ *   나았지만 배포가 통째로 막혔습니다.
+ *
+ *   Next.js 는 서버 동작(Server Action)의 내보낸 이름을 결과물
+ *   (server-reference-manifest.json)에 그대로 적어둡니다. Vercel 은
+ *   그것으로 경로를 만드는데, 경로 검사가 영문·숫자·기호만 받습니다.
+ *
+ *       Builder returned invalid routes: should match pattern
+ *       "^[a-zA-Z0-9_ :;.,\"'?!(){}[]@<>=+*#$&`|~^%/-]+$"
+ *
+ *   빌드는 끝까지 성공하고 그 다음 단계에서 2초 만에 죽습니다.
+ *   빌드 기록에는 빨간 줄이 한 줄도 안 남아서 원인을 찾는 데
+ *   한참 걸렸습니다.
+ *
+ *   화면에 보이는 글자(단추 이름·안내문)는 한글 그대로 둡니다.
+ *   내보내는 이름만 영문입니다.
+ */
+
+/**
  * 모의투자에서 실제로 기록을 남기는 곳.
  *
  * ★ 모든 함수가 맨 먼저 자물쇠를 확인합니다 ★
@@ -35,21 +56,21 @@ const 새로고침 = () => revalidatePath("/practice");
 
 /* ── 자물쇠 ───────────────────────────────────────────────── */
 
-export async function 열기(_prev: Result | null, form: FormData): Promise<Result> {
+export async function unlockPractice(_prev: Result | null, form: FormData): Promise<Result> {
   const ok = await unlock(String(form.get("passcode") ?? ""));
   if (!ok) return 실패("암호가 맞지 않습니다.");
   새로고침();
   return 성공("");
 }
 
-export async function 잠그기(): Promise<void> {
+export async function lockPractice(): Promise<void> {
   await lock();
   새로고침();
 }
 
 /* ── 예수금 ───────────────────────────────────────────────── */
 
-export async function 돈넣기(_prev: Result | null, form: FormData): Promise<Result> {
+export async function deposit(_prev: Result | null, form: FormData): Promise<Result> {
   if (!(await allowed())) return 실패("먼저 암호를 넣어주세요.");
 
   const amount = Number(form.get("amount"));
@@ -82,7 +103,7 @@ export async function 돈넣기(_prev: Result | null, form: FormData): Promise<R
 
 /* ── 사기 ─────────────────────────────────────────────────── */
 
-export async function 사기(_prev: Result | null, form: FormData): Promise<Result> {
+export async function buy(_prev: Result | null, form: FormData): Promise<Result> {
   if (!(await allowed())) return 실패("먼저 암호를 넣어주세요.");
 
   const code = String(form.get("code") ?? "").trim();
@@ -135,7 +156,7 @@ export async function 사기(_prev: Result | null, form: FormData): Promise<Resu
 
 /* ── 팔기 ─────────────────────────────────────────────────── */
 
-export async function 팔기(_prev: Result | null, form: FormData): Promise<Result> {
+export async function sell(_prev: Result | null, form: FormData): Promise<Result> {
   if (!(await allowed())) return 실패("먼저 암호를 넣어주세요.");
 
   const code = String(form.get("code") ?? "").trim();

@@ -18,7 +18,7 @@ import { num, signed, tone } from "@/lib/format";
 import { BuyForm, SellForm, CashForm, GateForm } from "@/components/PracticeForms";
 import AssetChart from "@/components/AssetChart";
 import Timeline from "@/components/Timeline";
-import { 사기, 팔기, 돈넣기, 열기, 잠그기 } from "./actions";
+import { buy, sell, deposit, unlockPractice, lockPractice } from "./actions";
 
 /**
  * 모의투자 — 진짜 돈 없이 사고파는 연습.
@@ -60,7 +60,7 @@ export default async function PracticePage({
           연습 기록을 지키기 위해 암호를 한 번 확인합니다. 한 번 넣으면 30일
           동안 다시 묻지 않습니다.
         </p>
-        <GateForm action={열기} />
+        <GateForm action={unlockPractice} />
       </Shell>
     );
   }
@@ -136,7 +136,7 @@ export default async function PracticePage({
           잡으셔야 연습이 됩니다. 1억을 넣고 연습하면 실제와 느낌이 너무
           달라집니다.
         </p>
-        <CashForm action={돈넣기} />
+        <CashForm action={deposit} />
       </Shell>
     );
   }
@@ -242,7 +242,7 @@ export default async function PracticePage({
         <span>왜 사는지 적어야 합니다</span>
       </div>
       <BuyForm
-        action={사기}
+        action={buy}
         stocks={살수있는종목}
         reasons={BUY_REASONS}
         cash={cash}
@@ -254,7 +254,7 @@ export default async function PracticePage({
         <h2>팔기</h2>
       </div>
       <SellForm
-        action={팔기}
+        action={sell}
         holdings={held.map((h) => ({
           code: h.code,
           name: h.name,
@@ -327,7 +327,7 @@ export default async function PracticePage({
       <div className="sec-h">
         <h2>연습에 쓸 돈</h2>
       </div>
-      <CashForm action={돈넣기} />
+      <CashForm action={deposit} />
 
       <p className="foot">
         진짜 돈은 한 푼도 쓰지 않습니다. 수수료 0.015%, 증권거래세 0.18%(팔 때만)로
@@ -336,7 +336,7 @@ export default async function PracticePage({
         장중 실제 가격과는 다릅니다.
       </p>
 
-      <form action={잠그기}>
+      <form action={lockPractice}>
         <button className="btn ghost">잠그기</button>
       </form>
     </Shell>
