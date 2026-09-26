@@ -40,7 +40,10 @@ REPORT_TYPE = {
     "company": "CO", "industry": "INDUSTRY", "market": "MARKET", "economy": "ECONOMY",
 }
 
-UA = ("Mozilla/5.0 (compatible; RichStock/1.0; 개인 학습용 수집기)")
+# ★ 영문만 씁니다 ★
+#   HTTP 머리글은 latin-1 로만 보낼 수 있습니다. 여기에 한글을 넣으면
+#   부르기도 전에 UnicodeEncodeError 로 죽습니다. 실제로 그랬습니다.
+UA = "Mozilla/5.0 (compatible; RichStock/1.0; personal study crawler)"
 
 
 def fetch(url: str, timeout: int = 20) -> tuple[int, str]:
@@ -49,6 +52,8 @@ def fetch(url: str, timeout: int = 20) -> tuple[int, str]:
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "ko-KR,ko;q=0.9",
     })
+    for k, v in req.headers.items():
+        v.encode("latin-1")      # 한글이 섞이면 여기서 바로 드러납니다
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read()
         enc = r.headers.get_content_charset() or "utf-8"
