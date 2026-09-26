@@ -32,6 +32,10 @@ on:
         description: "회사 정보(느림)를 건너뛰려면 yes"
         required: false
         default: "no"
+      with_annuals:
+        description: "연간 재무까지 받으려면 yes (느림. 해마다 한 번이면 충분)"
+        required: false
+        default: "no"
 
 concurrency:
   group: us-collect
@@ -71,11 +75,11 @@ jobs:
         run: |
           DAYS="${{ github.event.inputs.days }}"
           if [ -z "$DAYS" ]; then DAYS=7; fi
-          if [ "${{ github.event.inputs.skip_profile }}" = "yes" ]; then
-            python -m src.us_collect --days "$DAYS" --skip-profile
-          else
-            python -m src.us_collect --days "$DAYS"
-          fi
+          ARGS="--days $DAYS"
+          if [ "${{ github.event.inputs.skip_profile }}" = "yes" ]; then ARGS="$ARGS --skip-profile"; fi
+          if [ "${{ github.event.inputs.with_annuals }}" = "yes" ]; then ARGS="$ARGS --with-annuals"; fi
+          echo "실행: python -m src.us_collect $ARGS"
+          python -m src.us_collect $ARGS
 
       - name: 실패 시 안내
         if: failure()

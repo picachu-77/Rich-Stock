@@ -241,3 +241,109 @@ def fetch_profiles(symbols: list[str], pause: float = 0.8) -> dict[str, dict]:
             print(f"    · {n}/{len(symbols)}종목 정보 수집")
         _sleep(pause)
     return out
+
+
+# ── 연간 재무 (미국 종목의 '흐름' 을 위해) ────────────────────
+#
+# ★ 왜 따로 받나 ★
+#   회사 정보(.info)가 주는 ROE·부채비율은 '최근 12개월' 한 덩어리입니다.
+#   그것만으로는 '지금 어떤가' 는 말해도 '어느 쪽으로 가고 있나' 는
+#   말할 수 없습니다. 초보자에게는 뒤쪽이 훨씬 중요합니다.
+#
+#   연간 재무제표를 받으면 3~4년치가 나옵니다. 한국 종목의 재무 흐름과
+#   같은 자리에 같은 모양으로 들어갑니다.
+#
+# ★ 원본 금액은 저장하지 않습니다 ★
+#   financial 표의 금액 칸들은 '원' 단위로 적어둔 곳입니다. 달러 금액을
+#   넣으면 단위가 뒤섞입니다. 비율(ROE·부채비율·영업이익률)만 넣습니다.
+
+# 야후가 주는 항목 이름은 판마다 조금씩 다릅니다. 후보를 여러 개 둡니다.
+_REVENUE = ("Total Revenue", "Operating Revenue", "TotalRevenue")
+_OPINCOME = ("Operating Income", "Total Operating Income As Reported", "OperatingIncome")
+_NETINCOME = ("Net Income", "Net Income Common Stockholders", "NetIncome")
+_EQUITY = ("Stockholders Equity", "Total Stockholder Equity", "StockholdersEquity")
+_LIABILITIES = (
+    "Total Liabilities Net Minority Interest",
+    "Total Liabilities",
+    "TotalLiabilitiesNetMinorityInterest",
+)
+
+
+def _pick(df, names, column):
+    """여러 이름 중 먼저 맞는 줄의 값을 꺼냅니다."""
+    if df is None or getattr(df, "empty", True):
+        return None
+    for n in names:
+        if n in df.index:
+            try:
+                v = df.loc[n, column]
+            except Exception:
+                continue
+            if v is None:
+                continue
+            try:
+                x = float(v)
+            except (TypeError, ValueError):
+                continue
+            if x == x:                  # NaN 아님
+                return x
+    return None
+
+
+def fetch_annuals(
+    symbols: list[str], years: int = 4, pause: float = 1.0
+) -> dict[str, list[dict]]:
+    """
+    종목별 연간 재무 비율을 돌려줍니다.
+        [{"year": 2025, "roe": 12.3, "debt_ratio": 145.0, "op_margin": 28.1}, ...]
+
+    한 종목에 두 번씩 부릅니다(손익계산서·재무상태표). 100종목이면
+    3~4분 걸립니다. 해마다 한 번만 바뀌는 값이라 매일 받을 필요는
+    없습니다.
+    """
+    import yfinance as yf
+
+    out: dict[str, list[dict]] = {}
+    for n, sym in enumerate(symbols, 1):
+        try:
+            t = yf.Ticker(sym)
+            inc = t.income_stmt
+            bal = t.balance_sheet
+        except Exception as e:
+            print(f"    ! {sym} 연간 재무를 받지 못했습니다: {e}")
+            _sleep(pause)
+            continue
+
+        if inc is None or getattr(inc, "empty", True):
+            _sleep(pause)
+            continue
+
+        rows: list[dict] = []
+        for col in list(inc.columns)[:years]:
+            year = getattr(col, "year", None)
+            if year is None:
+                continue
+            revenue = _pick(inc, _REVENUE, col)
+            op = _pick(inc, _OPINCOME, col)
+            net = _pick(inc, _NETINCOME, col)
+            equity = _pick(bal, _EQUITY, col)
+            liab = _pick(bal, _LIABILITIES, col)
+
+            roe = net / equity * 100 if net is not None and equity else None
+            debt = liab / equity * 100 if liab is not None and equity else None
+            margin = op / revenue * 100 if op is not None and revenue else None
+            if roe is None and debt is None and margin is None:
+                continue
+            rows.append({
+                "year": int(year),
+                "roe": None if roe is None else round(roe, 2),
+                "debt_ratio": None if debt is None else round(debt, 2),
+                "op_margin": None if margin is None else round(margin, 2),
+            })
+
+        if rows:
+            out[sym] = rows
+        if n % 20 == 0:
+            print(f"    · {n}/{len(symbols)}종목 연간 재무")
+        _sleep(pause)
+    return out

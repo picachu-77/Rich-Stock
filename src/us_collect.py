@@ -42,7 +42,14 @@ from .store import (
     summary,
 )
 from .us_list import EXCHANGE, SECTOR_KO, US_TICKERS
-from .yahoo import FX_SYMBOL, INDEXES, fetch_prices, fetch_profiles, fetch_series
+from .yahoo import (
+    FX_SYMBOL,
+    INDEXES,
+    fetch_annuals,
+    fetch_prices,
+    fetch_profiles,
+    fetch_series,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +58,8 @@ def parse_args() -> argparse.Namespace:
                    help="며칠 전까지 받을지 (기본 7. 처음 채울 때는 365)")
     p.add_argument("--skip-profile", action="store_true",
                    help="회사 정보(느림)를 건너뛰고 시세만 받습니다")
+    p.add_argument("--with-annuals", action="store_true",
+                   help="연간 재무까지 받습니다 (느림. 해마다 한 번이면 충분)")
     return p.parse_args()
 
 
@@ -102,7 +111,7 @@ def collect_indexes(conn, start: date, end: date) -> int:
     return saved
 
 
-def collect(conn, days: int, skip_profile: bool) -> None:
+def collect(conn, days: int, skip_profile: bool, with_annuals: bool = False) -> None:
     end = date.today()
     start = end - timedelta(days=days)
     print(f"\n[1/5] 지수와 환율 ({start} ~ {end})")
@@ -184,7 +193,23 @@ def collect(conn, days: int, skip_profile: bool) -> None:
 
     print("\n[5/5] 지표 저장")
     print(f"  PER·PBR·배당 {save_fundamentals(conn, fund_rows):,}종목")
-    print(f"  ROE·부채비율 {save_us_financials(conn, fin_rows):,}종목")
+    print(f"  ROE·부채비율(최근 1년) {save_us_financials(conn, fin_rows):,}종목")
+
+    # ★ 연간 재무 ★
+    #   '최근 1년' 한 덩어리만으로는 '지금 어떤가' 는 말해도 '어느 쪽으로
+    #   가고 있나' 는 말할 수 없습니다. 연간 재무를 받아야 재무 흐름 표가
+    #   한 칸짜리를 넘어섭니다. (표는 두 칸부터 보여줍니다)
+    #
+    #   분기는 4(사업보고서)로 넣습니다. 한국 종목의 연간 자리와 같습니다.
+    if with_annuals:
+        print("\n[덤] 연간 재무 (느립니다)")
+        annuals = fetch_annuals([c for c in symbols if c in prices])
+        rows_a = []
+        for code, years in annuals.items():
+            for y in years:
+                rows_a.append((code, y["year"], 4, y["roe"], y["debt_ratio"],
+                               y["op_margin"], "yahoo-annual"))
+        print(f"  {len(annuals):,}종목 · {save_us_financials(conn, rows_a):,}개 연도 저장")
 
     log_ingest(conn, end, "US", "done", len(rows), f"{len(prices)}종목")
 
@@ -196,7 +221,7 @@ def main() -> None:
     print("=" * 60)
 
     with get_conn() as conn:
-        collect(conn, args.days, args.skip_profile)
+        collect(conn, args.days, args.skip_profile, args.with_annuals)
         info = summary(conn)
 
     print()
