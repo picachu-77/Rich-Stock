@@ -496,6 +496,10 @@ a { color: inherit; text-decoration: none; }
 }
 .tt thead th:first-child { position: sticky; left: 0; z-index: 2;
                            background: var(--surface); border-right: 1px solid var(--rule); }
+
+/* 금액 아래 붙는 '작년 같은 분기 대비' */
+.tt-yoy { display: block; font-size: .64rem; font-weight: 600; margin-top: 1px; }
+.tt-yoy.flat { color: var(--ink-3); }
 .tt tbody tr + tr th, .tt tbody tr + tr td { border-top: 1px solid var(--rule); }
 .tt td.up { color: var(--up); }
 .tt td.down { color: var(--down); }
@@ -834,6 +838,45 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .idx-k { display: block; font-size: .68rem; color: var(--ink-3); }
 .idx-v { display: block; font-size: .86rem; font-weight: 700; color: var(--ink); margin-top: 1px; }
 .idx-c { display: block; font-size: .7rem; font-weight: 700; margin-top: 1px; }
+
+/* 그날 오간 돈 (거래대금) */
+.liq { margin: 8px 0 0; font-size: .78rem; color: var(--ink-3); }
+.liq b { color: var(--ink); font-weight: 700; }
+.liq-x { margin-left: 6px; }
+.liq-care {
+  display: block; margin-top: 5px;
+  font-size: .76rem; line-height: 1.6; color: var(--ink-2);
+}
+.liq-care b { color: var(--ink); }
+
+/* ── 증권사 목표주가 ───────────────────────────────────────
+   시세 색을 쓰지 않습니다. 목표주가는 남의 의견이지 오른 값이
+   아닙니다. 지금 값과의 차이만 색을 씁니다 — 그건 실제 계산입니다. */
+.tg {
+  margin-top: 10px; padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.tg-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.tg-k { display: block; font-size: .72rem; color: var(--ink-3); }
+.tg-v { font-size: 1.35rem; font-weight: 700; color: var(--ink); letter-spacing: -.02em; }
+.tg-gap { font-size: .86rem; font-weight: 700; color: var(--ink-2); }
+.tg-range {
+  display: flex; justify-content: space-between; gap: 10px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-size: .78rem; color: var(--ink-3);
+}
+.tg-range b { color: var(--ink-2); font-weight: 600; }
+.tg-note { margin: 10px 0 0; font-size: .78rem; line-height: 1.65; color: var(--ink-2); }
+.tg-note b { color: var(--ink); }
+.tg-care {
+  margin: 10px 0 0; padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-size: .78rem; line-height: 1.7; color: var(--ink-2);
+}
+.tg-care b { color: var(--ink); }
 
 /* 달러 종목의 원화 어림값 한 줄 */
 .fx-note {

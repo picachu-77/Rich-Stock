@@ -5,16 +5,18 @@ import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
 import Fact from "@/components/Fact";
 import TrendTable from "@/components/TrendTable";
+import TargetCard from "@/components/TargetCard";
 import Readout from "@/components/Readout";
 import { getHistory, getStock } from "@/lib/stocks";
 import { getStockNews, newsReady } from "@/lib/news";
 import { getStockDisclosures } from "@/lib/disclosures";
 import { getPeers, rankWord } from "@/lib/peers";
+import { getTarget } from "@/lib/reports";
 import { getTrend } from "@/lib/trend";
 import * as 설명 from "@/lib/explain";
 import { readout } from "@/lib/readout";
 import { PERIODS } from "@/lib/periods";
-import { eok, limitHit, num, price, signed, tone } from "@/lib/format";
+import { eok, flow, limitHit, num, price, signed, tone } from "@/lib/format";
 
 export const revalidate = 3600;
 
@@ -29,7 +31,7 @@ export default async function StockPage({
 
   // 공시는 창고에서 바로 읽습니다. 뉴스는 종목 이름으로 찾기 때문에
   // 종목을 확인한 뒤에 부릅니다. 둘 다 실패해도 이 화면은 열립니다.
-  const [disclosures, news, peers, trend] = await Promise.all([
+  const [disclosures, news, peers, trend, target] = await Promise.all([
     // 미국 회사는 DART(한국 전자공시) 대상이 아닙니다. 빈 목록을
     // 보여주면 '이 회사는 아무것도 신고하지 않았다' 로 읽혀 틀립니다.
     stock.currency === "USD"
@@ -39,9 +41,34 @@ export default async function StockPage({
     // ETF 는 회사가 아니라 업종이 없고 재무제표도 없습니다.
     stock.kind === "ETF" ? Promise.resolve(null) : getPeers(stock.code),
     stock.kind === "ETF" ? Promise.resolve([]) : getTrend(stock.code),
+    // ETF 와 미국 종목은 한경컨센서스 대상이 아닙니다.
+    stock.kind === "ETF" || stock.currency === "USD"
+      ? Promise.resolve(null)
+      : getTarget(stock.code),
   ]);
 
   const dir = tone(stock.change_pct);
+
+  /**
+   * 그날 오간 돈 (거래대금).
+   *
+   * ★ 왜 거래량이 아니라 거래대금인가 ★
+   *   '10만 주 거래' 는 그 종목이 500원짜리인지 50만원짜리인지에 따라
+   *   5천만원일 수도, 500억일 수도 있습니다. 주식 수로는 많은지 적은지를
+   *   알 수 없습니다.
+   *
+   * ★ 왜 이걸 봐야 하는가 ★
+   *   초보자가 잘 모르고 다치는 곳입니다. 오가는 돈이 적은 종목은
+   *   **팔고 싶을 때 제값에 못 팝니다.** 사는 것은 언제나 쉽지만 파는 것은
+   *   상대가 있어야 합니다.
+   */
+  const 거래대금 =
+    stock.volume !== null && stock.close !== null
+      ? (stock.volume * stock.close) / 100_000_000   // 억 원
+      : null;
+  // 하루 1억원은 한국 시장에서 꽤 한산한 축입니다. 딱 잘라 '위험'이라고
+  // 하지는 않고, 팔 때를 생각해보라고만 말합니다.
+  const 한산함 = 거래대금 !== null && 거래대금 < 100;
   // 아래 '숫자' 칸에 빈칸이 하나라도 있는가
   const 빈칸있음 =
     stock.market_cap === null ||
@@ -78,6 +105,22 @@ export default async function StockPage({
             <span className="n">{stock.trade_date}</span> 기준
           </span>
         </div>
+
+        {거래대금 !== null && (
+          <p className={`liq${한산함 ? " thin" : ""}`}>
+            그날 오간 돈 <b className="n">{flow(거래대금)}</b>
+            <span className="liq-x">
+              (거래량 <span className="n">{num(stock.volume)}</span>주)
+            </span>
+            {한산함 && (
+              <span className="liq-care">
+                오가는 돈이 적은 편입니다. 이런 종목은 <b>팔고 싶을 때 제값에
+                못 팔 수 있습니다</b> — 사는 것은 쉬워도 파는 것은 사줄 사람이
+                있어야 합니다.
+              </span>
+            )}
+          </p>
+        )}
 
         {/* 미국 종목은 달러가 진짜 시세입니다. 원화는 그날 환율로 바꾼
             어림값이라, 그렇다고 밝혀 적습니다. 실제로 살 때는 증권사
@@ -183,6 +226,10 @@ export default async function StockPage({
         {/* 공시가 먼저입니다. 회사가 직접 신고한 사실이라 기사보다
             정확합니다. 뉴스는 열쇠가 있을 때만 그 아래에 붙습니다. */}
         {trend.length >= 2 && <TrendTable rows={trend} />}
+
+        {/* 회사 자체를 본 다음에 놓습니다. 남이 어떻게 보는지는 내가
+            보고 난 뒤에 참고할 것이지, 먼저 볼 것이 아닙니다. */}
+        {target && <TargetCard target={target} close={stock.close} />}
 
         {/* 보다가 바로 연습으로. 목록 3,931개에서 다시 찾게 하면
             보는 일과 연습하는 일이 끊깁니다. */}

@@ -56,6 +56,26 @@ export const eok = (v: number | null | undefined): string => {
   return `${num(Math.round(v))}억`;
 };
 
+/**
+ * 억이 안 될 수도 있는 돈. 거래대금처럼 폭이 넓은 값에 씁니다.
+ *
+ *   54,000,000원 → "5,400만원"   (eok 로는 "1억" 이 되어 버립니다)
+ *          3.7억 → "3.7억"
+ *          412억 → "412억"
+ *
+ * eok 는 시가총액용이라 억 아래를 반올림합니다. 시가총액이 1억이 안 되는
+ * 회사는 없어서 괜찮지만, 거래대금은 한산한 날 수천만 원에 그칩니다.
+ * 그걸 '1억' 이라고 적으면 한산하다는 사실 자체가 지워집니다.
+ */
+export const flow = (억: number | null | undefined): string => {
+  if (억 === null || 억 === undefined || Number.isNaN(억)) return "";
+  if (억 === 0) return "0원";
+  if (억 >= 10000) return eok(억);
+  if (억 >= 100) return `${num(Math.round(억))}억`;
+  if (억 >= 1) return `${num(억, 1)}억`;
+  return `${num(Math.round(억 * 10000))}만원`;
+};
+
 /** 오름/내림에 따라 색을 고릅니다. (한국은 오르면 빨강, 내리면 파랑) */
 export const tone = (v: number | null | undefined): string =>
   v === null || v === undefined || Number.isNaN(v)
