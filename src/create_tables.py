@@ -291,6 +291,37 @@ CREATE TABLE IF NOT EXISTS market_index (
 CREATE INDEX IF NOT EXISTS idx_index_date ON market_index (trade_date DESC);
 
 -- ─────────────────────────────────────────────────────────────
+-- 13) 부서 보고서 (AI 가 쓴 것)
+-- ─────────────────────────────────────────────────────────────
+--    증권사처럼 여섯 부서로 나눠 한 종목을 본 결과입니다.
+--
+--    ★ 왜 저장하나 ★
+--      한 종목을 보는 데 Claude 를 다섯 번 부릅니다. 화면을 열 때마다
+--      부르면 느리고 돈이 듭니다. 한 번 써두고 다시 씁니다.
+--
+--    ★ 왜 '언제 썼는지' 를 같이 두나 ★
+--      시세도 실적도 계속 바뀝니다. 한 달 전에 쓴 보고서를 오늘 것처럼
+--      보여주면 안 됩니다. 화면에 '며칠 전에 쓴 것' 을 꼭 적습니다.
+--
+--    ★ 원문을 그대로 둡니다 ★
+--      요약해서 넣지 않습니다. 나중에 '왜 이렇게 봤나' 를 되짚으려면
+--      그때 쓴 글이 그대로 있어야 합니다.
+CREATE TABLE IF NOT EXISTS desk_report (
+    code        TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- 여섯 부서의 보고서 원문 (JSON: {부서이름: 글})
+    reports     JSONB NOT NULL,
+    -- 운용부가 낸 결론만 따로 빼둡니다. 목록에서 거르려고요.
+    verdict     TEXT,               -- 관심 / 보류 / 제외
+    -- 어느 모델로 썼는지. 나중에 '그때 뭐로 썼더라' 를 알 수 있게.
+    models      TEXT,
+    PRIMARY KEY (code, created_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_desk_code
+    ON desk_report (code, created_at DESC);
+
+-- ─────────────────────────────────────────────────────────────
 -- 12) 배당 (현금ㆍ현물배당결정 공시에서 읽어낸 것)
 -- ─────────────────────────────────────────────────────────────
 --    "배당 받으려면 언제까지 사야 하나" 에 답하기 위한 표입니다.
@@ -461,7 +492,7 @@ def main() -> None:
     for name, col_count in tables:
         print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count:,}개)")
 
-    expected = 11
+    expected = 12
     if len(tables) == expected:
         print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
         print("  자동 생성 API 로는 아무도 표를 읽거나 고칠 수 없게 잠갔습니다.")
