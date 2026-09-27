@@ -849,6 +849,61 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 }
 .liq-care b { color: var(--ink); }
 
+/* ── 여섯 부서 ─────────────────────────────────────────────
+   의견(관심/보류/제외)에 색을 쓰지 않습니다. '관심' 을 빨갛게 칠하면
+   '오른다' 로 읽힙니다. 이건 시세가 아니라 판단입니다.          */
+.dk-old {
+  margin: 10px 0 0; padding: 9px 12px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  font-size: .76rem; line-height: 1.6; color: var(--ink-2);
+}
+.dk-old b { color: var(--ink); }
+
+.dk-top {
+  margin-top: 10px; padding: 13px;
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+}
+.dk-top-h { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.dk-desk { font-size: .82rem; font-weight: 700; color: var(--ink); }
+.dk-verdict {
+  font-size: .72rem; font-weight: 700; color: var(--ink-2);
+  padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--rule-2); background: var(--surface-2);
+}
+/* 줄바꿈을 살립니다. AI 가 번호를 매겨 쓰기 때문에 한 덩어리로
+   뭉치면 못 읽습니다. */
+.dk-body {
+  white-space: pre-wrap;
+  font-size: .82rem; line-height: 1.75; color: var(--ink-2);
+}
+
+.dk-list {
+  margin-top: 10px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.dk { border-bottom: 1px solid var(--rule); }
+.dk:last-child { border-bottom: 0; }
+.dk > summary {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  min-height: var(--tap); padding: 12px 13px;
+  cursor: pointer; list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.dk > summary::-webkit-details-marker { display: none; }
+.dk > summary:active { background: var(--surface-2); }
+@media (hover: hover) { .dk > summary:hover { background: var(--surface-2); } }
+.dk > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.dk-note { font-size: .72rem; color: var(--ink-3); }
+.dk[open] > summary { border-bottom: 1px solid var(--rule); }
+.dk[open] .dk-note { color: var(--ink-2); }
+.dk .dk-body { padding: 11px 13px 14px; }
+
 /* ── 배당 ──────────────────────────────────────────────────
    색을 쓰지 않습니다. 배당은 오르내리는 것이 아닙니다. */
 .dv-next {
