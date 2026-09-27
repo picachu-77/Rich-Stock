@@ -43,8 +43,10 @@ from .store import (
 )
 from .us_list import EXCHANGE, SECTOR_KO, US_TICKERS
 from .yahoo import (
+    ECONOMY,
     FX_SYMBOL,
     INDEXES,
+    SANE,
     fetch_annuals,
     fetch_prices,
     fetch_profiles,
@@ -92,14 +94,30 @@ class Fx:
 
 
 def collect_indexes(conn, start: date, end: date) -> int:
-    """지수와 환율을 받아 저장합니다."""
+    """지수·환율과 경제 지표를 받아 저장합니다.
+
+    같은 표(market_index)에 함께 담습니다. 생김새가 똑같기 때문입니다
+    — 기호, 날짜, 값, 전날 대비. 무엇을 어느 칸에 보여줄지는 화면
+    쪽에서 기호를 보고 정합니다.
+    """
     saved = 0
-    for symbol, name in INDEXES.items():
+    for symbol, name in {**INDEXES, **ECONOMY}.items():
         print(f"  · {name} ({symbol}) 받는 중...")
         series = fetch_series(symbol, start, end)
         if not series:
             print(f"    ! {name} 은 받지 못했습니다. 다음으로 넘어갑니다.")
             continue
+
+        # 단위가 뒤집힌 채로 들어오는 일을 막습니다. 자세한 사정은
+        # yahoo.py 의 SANE 주석에 적어뒀습니다.
+        lo, hi = SANE.get(symbol, (float("-inf"), float("inf")))
+        last = series[-1][1]
+        if not (lo <= last <= hi):
+            print(f"    ! {name} 의 마지막 값이 {last:,.4f} 입니다.")
+            print(f"      {lo:,.0f} ~ {hi:,.0f} 안에 있어야 합니다.")
+            print("      단위가 바뀐 것 같아 저장하지 않고 넘어갑니다.")
+            continue
+
         rows = []
         prev: float | None = None
         for d, close in series:
@@ -114,7 +132,7 @@ def collect_indexes(conn, start: date, end: date) -> int:
 def collect(conn, days: int, skip_profile: bool, with_annuals: bool = False) -> None:
     end = date.today()
     start = end - timedelta(days=days)
-    print(f"\n[1/5] 지수와 환율 ({start} ~ {end})")
+    print(f"\n[1/5] 지수·환율·경제 지표 ({start} ~ {end})")
     collect_indexes(conn, start, end)
 
     fx = Fx(fx_rates(conn, FX_SYMBOL))

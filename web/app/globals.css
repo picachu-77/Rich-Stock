@@ -402,6 +402,53 @@ a { color: inherit; text-decoration: none; }
 }
 .fact-x .fact-care { color: var(--ink); }
 
+/* ── 경제 지표 ─────────────────────────────────────────────
+   숫자 칸(.facts)과 같은 방식입니다. 다른 점은 둘씩 놓는다는 것과,
+   색을 전혀 쓰지 않는다는 것입니다 — 지표에서 '올랐다' 는 좋은 일도
+   나쁜 일도 아닙니다.                                            */
+.econ {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 10px 0 0;
+}
+.ec { background: var(--surface); }
+.ec > summary {
+  display: block; padding: 10px 12px;
+  min-height: var(--tap);
+  cursor: pointer; list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ec > summary::-webkit-details-marker { display: none; }
+.ec > summary:active { background: var(--surface-2); }
+@media (hover: hover) { .ec > summary:hover { background: var(--surface-2); } }
+.ec > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+
+.ec-k { display: flex; align-items: center; gap: 3px; font-size: .7rem; color: var(--ink-3); }
+.ec-q {
+  font-style: normal; font-size: .58rem; font-weight: 700;
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1px solid var(--rule-2); color: var(--ink-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+}
+.ec[open] .ec-q { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+/* 값과 전날 대비를 한 줄에 둡니다. 세로로 쌓으면 칸이 높아져서
+   넉 줄이 첫 화면을 다 먹습니다. */
+.ec-row { display: flex; align-items: baseline; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+.ec-v { font-size: .98rem; font-weight: 700; color: var(--ink); }
+.ec-d { font-size: .72rem; font-weight: 600; color: var(--ink-3); }
+
+.ec[open] { grid-column: 1 / -1; }
+.ec-x {
+  padding: 10px 12px 13px;
+  font-size: .82rem; line-height: 1.7; color: var(--ink-2);
+  border-top: 1px solid var(--rule);
+}
+
 /* 접어둔 도움말 한 줄 */
 .hint { margin: 10px 0 0; }
 .hint > summary {

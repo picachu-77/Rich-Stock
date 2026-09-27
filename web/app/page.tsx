@@ -2,11 +2,13 @@ import Link from "next/link";
 import NewsList from "@/components/NewsList";
 import DisclosureList from "@/components/DisclosureList";
 import IndexStrip from "@/components/IndexStrip";
+import EconomyGrid from "@/components/EconomyGrid";
 import ReportList from "@/components/ReportList";
 import { getBreadth, getLastDate } from "@/lib/stocks";
 import { getMarketNews, newsReady } from "@/lib/news";
 import { getRecentDisclosures } from "@/lib/disclosures";
 import { getIndexes } from "@/lib/indexes";
+import { getEconomy } from "@/lib/economy";
 import { getRecentReports } from "@/lib/reports";
 import { num } from "@/lib/format";
 
@@ -30,7 +32,7 @@ import { num } from "@/lib/format";
 export const revalidate = 3600;
 
 export default async function Home() {
-  const [breadth, lastDate, disclosures, news, indexes, reports] =
+  const [breadth, lastDate, disclosures, news, indexes, reports, economy] =
     await Promise.all([
       getBreadth(),
       getLastDate(),
@@ -38,6 +40,7 @@ export default async function Home() {
       newsReady() ? getMarketNews(3) : Promise.resolve([]),
       getIndexes(),
       getRecentReports(3, "기업"),
+      getEconomy(),
     ]);
 
   const moved = breadth.up + breadth.down;
@@ -86,7 +89,20 @@ export default async function Home() {
       </header>
 
       <main>
-        <div className="sec-h" style={{ marginTop: 4 }}>
+        {/* 지수 바로 다음입니다. 지수가 '오늘 어땠나' 라면 이건 그
+            뒤에 있는 사정이라, 공시·리포트보다 먼저 와야 순서가
+            맞습니다 — 넓은 것에서 좁은 것으로. */}
+        {economy.length > 0 && (
+          <>
+            <div className="sec-h" style={{ marginTop: 4 }}>
+              <h2>경제 지표</h2>
+              <span>눌러서 뜻 보기</span>
+            </div>
+            <EconomyGrid items={economy} />
+          </>
+        )}
+
+        <div className="sec-h">
           <h2>최근 공시</h2>
           <span>전자공시(DART)</span>
         </div>
