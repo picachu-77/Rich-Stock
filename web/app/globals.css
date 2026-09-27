@@ -849,6 +849,43 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 }
 .liq-care b { color: var(--ink); }
 
+/* ── 배당 ──────────────────────────────────────────────────
+   색을 쓰지 않습니다. 배당은 오르내리는 것이 아닙니다. */
+.dv-next {
+  margin-top: 10px; padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+}
+.dv-next-k { display: block; font-size: .72rem; color: var(--ink-3); }
+.dv-next-v { font-size: 1.3rem; font-weight: 700; color: var(--ink); letter-spacing: -.02em; }
+.dv-next-amt { margin-left: 8px; font-size: .84rem; font-weight: 600; color: var(--ink-2); }
+.dv-next-x {
+  margin: 8px 0 0; padding-top: 9px;
+  border-top: 1px solid var(--rule);
+  font-size: .79rem; line-height: 1.7; color: var(--ink-2);
+}
+.dv-next-x b { color: var(--ink); }
+
+.dv-list {
+  margin-top: 10px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.dv {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--rule);
+}
+.dv:last-child { border-bottom: 0; }
+.dv-kind { display: block; font-size: .82rem; font-weight: 600; color: var(--ink); }
+.dv-date { display: block; margin-top: 2px; font-size: .72rem; color: var(--ink-3); }
+.dv-r { text-align: right; white-space: nowrap; }
+.dv-r b { font-size: .95rem; font-weight: 700; color: var(--ink); }
+.dv-y { display: block; margin-top: 1px; font-size: .71rem; color: var(--ink-3); }
+
 /* ── 증권사 목표주가 ───────────────────────────────────────
    시세 색을 쓰지 않습니다. 목표주가는 남의 의견이지 오른 값이
    아닙니다. 지금 값과의 차이만 색을 씁니다 — 그건 실제 계산입니다. */

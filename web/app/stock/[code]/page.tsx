@@ -6,12 +6,14 @@ import DisclosureList from "@/components/DisclosureList";
 import Fact from "@/components/Fact";
 import TrendTable from "@/components/TrendTable";
 import TargetCard from "@/components/TargetCard";
+import DividendList from "@/components/DividendList";
 import Readout from "@/components/Readout";
 import { getHistory, getStock } from "@/lib/stocks";
 import { getStockNews, newsReady } from "@/lib/news";
 import { getStockDisclosures } from "@/lib/disclosures";
 import { getPeers, rankWord } from "@/lib/peers";
 import { getTarget } from "@/lib/reports";
+import { getDividends } from "@/lib/dividends";
 import { getTrend } from "@/lib/trend";
 import * as 설명 from "@/lib/explain";
 import { readout } from "@/lib/readout";
@@ -31,7 +33,7 @@ export default async function StockPage({
 
   // 공시는 창고에서 바로 읽습니다. 뉴스는 종목 이름으로 찾기 때문에
   // 종목을 확인한 뒤에 부릅니다. 둘 다 실패해도 이 화면은 열립니다.
-  const [disclosures, news, peers, trend, target] = await Promise.all([
+  const [disclosures, news, peers, trend, target, dividends] = await Promise.all([
     // 미국 회사는 DART(한국 전자공시) 대상이 아닙니다. 빈 목록을
     // 보여주면 '이 회사는 아무것도 신고하지 않았다' 로 읽혀 틀립니다.
     stock.currency === "USD"
@@ -45,6 +47,8 @@ export default async function StockPage({
     stock.kind === "ETF" || stock.currency === "USD"
       ? Promise.resolve(null)
       : getTarget(stock.code),
+    // 미국 종목은 DART 공시 대상이 아닙니다.
+    stock.currency === "USD" ? Promise.resolve([]) : getDividends(stock.code),
   ]);
 
   const dir = tone(stock.change_pct);
@@ -230,6 +234,10 @@ export default async function StockPage({
         {/* 회사 자체를 본 다음에 놓습니다. 남이 어떻게 보는지는 내가
             보고 난 뒤에 참고할 것이지, 먼저 볼 것이 아닙니다. */}
         {target && <TargetCard target={target} close={stock.close} />}
+
+        {/* 배당은 '이 회사를 계속 들고 있을 것인가' 쪽 이야기라
+            숫자·리포트 다음에 둡니다. */}
+        <DividendList items={dividends} />
 
         {/* 보다가 바로 연습으로. 목록 3,931개에서 다시 찾게 하면
             보는 일과 연습하는 일이 끊깁니다. */}

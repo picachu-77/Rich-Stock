@@ -507,3 +507,33 @@ def summary(conn) -> dict:
         "first_date": min_d,
         "last_date": max_d,
     }
+
+def save_dividends(conn, rows: list[tuple]) -> int:
+    """
+    배당 내용을 저장합니다.
+
+    (rcept_no, code, kind, per_share, per_share_pref, yield_pct,
+     record_date, pay_date, decided_at)
+
+    접수번호가 열쇠라 같은 공시를 두 번 읽어도 한 줄입니다.
+    공시는 정정될 수 있으니 덮어씁니다 — 1주당 배당금이 바뀌는 일이
+    실제로 있습니다.
+    """
+    return bulk_upsert(
+        conn,
+        """
+        INSERT INTO dividend (rcept_no, code, kind, per_share, per_share_pref,
+                              yield_pct, record_date, pay_date, decided_at)
+        VALUES %s
+        ON CONFLICT (rcept_no) DO UPDATE SET
+            kind           = EXCLUDED.kind,
+            per_share      = EXCLUDED.per_share,
+            per_share_pref = EXCLUDED.per_share_pref,
+            yield_pct      = EXCLUDED.yield_pct,
+            record_date    = EXCLUDED.record_date,
+            pay_date       = EXCLUDED.pay_date,
+            decided_at     = EXCLUDED.decided_at,
+            updated_at     = now();
+        """,
+        rows,
+    )

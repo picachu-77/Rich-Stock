@@ -291,6 +291,39 @@ CREATE TABLE IF NOT EXISTS market_index (
 CREATE INDEX IF NOT EXISTS idx_index_date ON market_index (trade_date DESC);
 
 -- ─────────────────────────────────────────────────────────────
+-- 12) 배당 (현금ㆍ현물배당결정 공시에서 읽어낸 것)
+-- ─────────────────────────────────────────────────────────────
+--    "배당 받으려면 언제까지 사야 하나" 에 답하기 위한 표입니다.
+--
+--    ★ 왜 정기보고서(alotMatter)로 안 되나 ★
+--      정기보고서에는 주당배당금·배당수익률·배당성향이 3년치 들어
+--      있지만 **배당기준일이 없습니다**. 결산기준일(12월 31일)만
+--      있는데 그건 다른 날짜입니다.
+--
+--    ★ 왜 규칙으로 안 되나 ★
+--      예전에는 '12월 마지막 거래일 이틀 전까지' 가 통했습니다.
+--      2024년 배당절차 개선 뒤로 배당액을 먼저 정하고 기준일을 뒤로
+--      미루는 회사가 늘어서 회사마다 다릅니다.
+--
+--    한 회사가 한 해에 여러 번 배당할 수 있어서(분기배당) 공시 한 건을
+--    한 줄로 둡니다. 접수번호가 곧 열쇠입니다.
+CREATE TABLE IF NOT EXISTS dividend (
+    rcept_no       TEXT PRIMARY KEY,   -- 공시 접수번호
+    code           TEXT NOT NULL,      -- 종목코드
+    kind           TEXT,               -- 분기배당 · 결산배당 · 중간배당
+    per_share      INTEGER,            -- 보통주 1주당 배당금 (원)
+    per_share_pref INTEGER,            -- 우선주(종류주식) 1주당 배당금 (원)
+    yield_pct      NUMERIC(8, 2),      -- 시가배당률 (%)
+    record_date    DATE NOT NULL,      -- ★ 배당기준일 — 이 날 주주명부에 있어야 받습니다
+    pay_date       DATE,               -- 지급 예정일
+    decided_at     DATE,               -- 이사회결의일
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dividend_code
+    ON dividend (code, record_date DESC);
+
+-- ─────────────────────────────────────────────────────────────
 -- 11) 증권사 리포트 (한경컨센서스)
 -- ─────────────────────────────────────────────────────────────
 --    공시가 '회사가 스스로 신고한 것' 이라면, 리포트는 '밖에서 보는
@@ -428,7 +461,7 @@ def main() -> None:
     for name, col_count in tables:
         print(f"  [OK] {name:<12} {labels.get(name, ''):<12} (칸 {col_count:,}개)")
 
-    expected = 10
+    expected = 11
     if len(tables) == expected:
         print(f"\n완료! 표 {expected:,}개가 모두 준비되었습니다.")
         print("  자동 생성 API 로는 아무도 표를 읽거나 고칠 수 없게 잠갔습니다.")
