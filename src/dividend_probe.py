@@ -166,32 +166,58 @@ def probe_document(rcept_no: str) -> None:
 
     print(f"  ZIP 안: {zf.namelist()}")
     raw = zf.read(zf.namelist()[0])
-    text = raw.decode("utf-8", errors="replace")
-    if "<" in text[:200] and "euc-kr" in text[:200].lower():
-        text = raw.decode("euc-kr", errors="replace")
+    print(f"  푼 크기 {len(raw):,} 바이트")
+    print(f"  앞 120바이트 그대로: {raw[:120]!r}")
+
+    # ★ 어느 글자표로 풀어야 하는지 모릅니다 ★
+    #   지난번에 utf-8 로 풀고 '배당' 이 안 나오길래 '내용이 없나' 했는데,
+    #   원문을 찍어보지 않아서 확인할 수가 없었습니다. 이번에는 둘 다
+    #   풀어보고 '배당' 이 나오는 쪽을 씁니다. 글자가 깨졌는지 아닌지는
+    #   추측하지 말고 내용으로 판단합니다.
+    후보 = {}
+    for enc in ("euc-kr", "cp949", "utf-8"):
+        try:
+            후보[enc] = raw.decode(enc)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {enc}: 못 품 ({exc})")
+    print()
+    print("  ── 글자표별로 '배당' 이 몇 번 나오나 ──")
+    for enc, s in 후보.items():
+        print(f"    {enc:8} 배당 {s.count('배당'):3}회 · 기준일 {s.count('기준일'):3}회 "
+              f"· 못 읽은 글자 {s.count(chr(0xFFFD)):3}개")
+
+    best = max(후보.items(), key=lambda kv: kv[1].count("배당"), default=(None, ""))
+    if not best[0] or best[1].count("배당") == 0:
+        print()
+        print("  ! 어느 글자표로 풀어도 '배당' 이 없습니다.")
+        print("    이 파일은 겉표지일 뿐이고 알맹이가 따로 있을 수 있습니다.")
+        print()
+        print("  ── 푼 내용 앞 1,200자 (euc-kr 기준) ──")
+        s = 후보.get("euc-kr") or 후보.get("utf-8") or ""
+        print("    " + s[:1200].replace("\n", "\n    "))
+        return
+
+    enc, text = best
+    print(f"\n  → {enc} 로 읽습니다")
     plain = re.sub(r"<[^>]+>", " ", text)
     plain = re.sub(r"\s+", " ", plain)
-
     print(f"  글자 수 {len(plain):,}")
+
     print()
     print("  ── '기준일' 이 나오는 자리 ──")
     hits = 0
     for m in re.finditer(r"기준일", plain):
-        s = max(0, m.start() - 70)
-        print(f"    …{plain[s:m.end() + 70]}…")
+        s = max(0, m.start() - 80)
+        print(f"    …{plain[s:m.end() + 80]}…")
         hits += 1
-        if hits >= 6:
+        if hits >= 8:
             break
     if not hits:
         print("    (없음)")
 
     print()
-    print("  ── '배당' 이 나오는 자리 (앞 4곳) ──")
-    for i, m in enumerate(re.finditer(r"배당", plain)):
-        if i >= 4:
-            break
-        s = max(0, m.start() - 50)
-        print(f"    …{plain[s:m.end() + 90]}…")
+    print("  ── 내용 앞 1,500자 ──")
+    print("    " + plain[:1500])
 
 
 def main() -> None:
