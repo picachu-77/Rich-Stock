@@ -395,8 +395,15 @@ class Report:
     model: str
 
 
-def ask(system: str, user: str, model: str, max_tokens: int = 900) -> str:
-    """Claude 에게 한 번 묻습니다. 부품 없이 표준 도구만 씁니다."""
+def ask(system: str, user: str, model: str, max_tokens: int = 4000) -> str:
+    """Claude 에게 한 번 묻습니다. 부품 없이 표준 도구만 씁니다.
+
+    max_tokens 를 넉넉히 둡니다. 판단 모델(sonnet-5)은 따로 말하지 않아도
+    속으로 먼저 생각하고 답하는데, 그 생각도 이 한도 안에서 씁니다.
+    900 으로 두면 생각하다 한도를 다 써서 답이 잘리거나 비어 옵니다.
+    한도는 '최대' 일 뿐이라 늘려도 쓴 만큼만 돈이 듭니다.
+    길이는 지침의 'N줄 이내' 가 정합니다.
+    """
     key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         raise DeskError(
@@ -417,7 +424,7 @@ def ask(system: str, user: str, model: str, max_tokens: int = 900) -> str:
         "anthropic-version": API_VERSION,
     })
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
@@ -426,8 +433,19 @@ def ask(system: str, user: str, model: str, max_tokens: int = 900) -> str:
     except urllib.error.URLError as exc:
         raise DeskError(f"Claude 에 닿지 못했습니다: {exc.reason}") from exc
 
+    # 잘린 답·거절된 답을 멀쩡한 보고서처럼 저장하지 않습니다.
+    # 여기서 멈추면 desk_run 이 그 종목을 저장하지 않고 끝냅니다.
+    stop = data.get("stop_reason")
+    if stop == "max_tokens":
+        raise DeskError(f"답이 한도({max_tokens:,})에서 잘렸습니다 · 모델 {model}")
+    if stop == "refusal":
+        raise DeskError(f"Claude 가 답하지 않았습니다(거절) · 모델 {model}")
+
     parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
-    return "\n".join(parts).strip()
+    text = "\n".join(parts).strip()
+    if not text:
+        raise DeskError(f"빈 답이 왔습니다 (stop_reason={stop}) · 모델 {model}")
+    return text
 
 
 def run_desk(name: str, 자료: dict, 앞선보고: list[Report] | None = None,
