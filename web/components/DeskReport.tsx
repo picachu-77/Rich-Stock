@@ -52,7 +52,20 @@ export default function DeskReport({ report }: { report: Report | null }) {
         <div className="dk-top">
           <div className="dk-top-h">
             <span className="dk-desk">운용부</span>
-            {report.verdict && <span className="dk-verdict">{report.verdict}</span>}
+            {/* 장기와 단기를 따로 보여줍니다. 같은 회사가 장기로는
+                관심이고 단기로는 보류일 수 있습니다. */}
+            {report.verdictLong && (
+              <span className="dk-verdict">
+                <i>장기</i>
+                {report.verdictLong}
+              </span>
+            )}
+            {report.verdictShort && (
+              <span className="dk-verdict">
+                <i>단기</i>
+                {report.verdictShort}
+              </span>
+            )}
           </div>
           <div className="dk-body">{결론}</div>
         </div>

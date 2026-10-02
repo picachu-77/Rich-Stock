@@ -539,8 +539,9 @@ def save_dividends(conn, rows: list[tuple]) -> int:
     )
 
 
-def save_desk_report(conn, code: str, reports: dict, verdict: str | None,
-                     models: str) -> int:
+def save_desk_report(conn, code: str, reports: dict,
+                     verdict_long: str | None, verdict_short: str | None,
+                     found_by: str, models: str) -> int:
     """
     부서 보고서를 저장합니다.
 
@@ -550,8 +551,10 @@ def save_desk_report(conn, code: str, reports: dict, verdict: str | None,
     import json as _json
     with conn.cursor() as cur:
         cur.execute(
-            """INSERT INTO desk_report (code, reports, verdict, models)
-               VALUES (%s, %s, %s, %s)""",
-            (code, _json.dumps(reports, ensure_ascii=False), verdict, models),
+            """INSERT INTO desk_report
+                 (code, reports, verdict_long, verdict_short, found_by, models)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (code, _json.dumps(reports, ensure_ascii=False),
+             verdict_long, verdict_short, found_by, models),
         )
     return 1

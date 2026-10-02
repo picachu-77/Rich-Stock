@@ -1,3 +1,4 @@
+import Link from "next/link";
 import ReportList from "@/components/ReportList";
 import { getOpinionMix, getRecentReports } from "@/lib/reports";
 import { num } from "@/lib/format";
@@ -28,6 +29,14 @@ export default async function ReportsPage() {
       </header>
 
       <main>
+        {/* 우리 부서가 쓴 것으로 가는 길. 둘 다 '리포트' 라 헷갈리기
+            쉬워서, 여기가 '남이 쓴 글' 이고 저기가 '우리가 쓴 글'
+            이라는 것을 한 줄로 밝혀둡니다. */}
+        <Link href="/research" className="go-research">
+          <b>우리 부서가 추린 종목 보기</b>
+          <span>여섯 부서가 나눠 보고 모은 것 — 장기와 단기로 나눠 둡니다</span>
+        </Link>
+
         {mix && (
           <div className="mix">
             <div className="mix-h">최근 3개월 기업 리포트 {num(mix.total)}건</div>

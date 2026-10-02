@@ -312,7 +312,14 @@ CREATE TABLE IF NOT EXISTS desk_report (
     -- 여섯 부서의 보고서 원문 (JSON: {부서이름: 글})
     reports     JSONB NOT NULL,
     -- 운용부가 낸 결론만 따로 빼둡니다. 목록에서 거르려고요.
-    verdict     TEXT,               -- 관심 / 보류 / 제외
+    --
+    -- ★ 장기와 단기를 따로 둡니다 ★
+    --   같은 회사가 장기로는 관심이고 단기로는 보류일 수 있습니다.
+    --   하나로 뭉뚱그리면 둘 다 틀립니다.
+    verdict_long  TEXT,             -- 장기: 관심 / 보류 / 제외
+    verdict_short TEXT,             -- 단기: 관심 / 보류 / 제외
+    -- 어느 거르기에서 걸려 나온 종목인가 (long / short / both / 직접)
+    found_by    TEXT,
     -- 어느 모델로 썼는지. 나중에 '그때 뭐로 썼더라' 를 알 수 있게.
     models      TEXT,
     PRIMARY KEY (code, created_at)
@@ -444,6 +451,10 @@ ALTER TABLE dart_log    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paper_trade ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paper_cash  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE disclosure  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE market_index ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dividend     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE desk_report  ENABLE ROW LEVEL SECURITY;
 """
 
 
@@ -468,9 +479,12 @@ def main() -> None:
                   FROM information_schema.tables t
                  WHERE t.table_schema = 'public'
                    AND t.table_name IN
+                       -- ★ 표를 새로 만들면 여기에도 꼭 넣으세요 ★
+                       --   안 넣으면 "표가 N개보다 적습니다" 가 뜹니다.
+                       --   실제로 dividend·desk_report 를 두 번 빠뜨렸습니다.
                        ('ticker', 'daily_price', 'ingest_log', 'financial', 'dart_log',
                         'paper_trade', 'paper_cash', 'disclosure',
-                        'market_index', 'report')
+                        'market_index', 'report', 'dividend', 'desk_report')
                  ORDER BY table_name;
                 """
             )

@@ -57,39 +57,149 @@ class DeskError(RuntimeError):
 # ══════════════════════════════════════════════════════════════
 #  01 스크리닝부 — 사람이 짠 규칙. AI 안 씁니다.
 # ══════════════════════════════════════════════════════════════
-def screen(conn, limit: int = 20, min_cap_eok: int = 1000,
-           min_value_eok: float = 10.0) -> list[tuple]:
-    """
-    살펴볼 값어치가 있는 종목을 고릅니다.
+#
+# ★ 단기와 장기는 아예 다른 거르기입니다 ★
+#   같은 종목이 단기로는 좋고 장기로는 나쁠 수 있고, 그 반대도 됩니다.
+#   한 가지로 걸러놓고 "단기용인지 장기용인지" 를 AI 에게 묻는 것은
+#   순서가 거꾸로입니다. 애초에 찾는 것이 다릅니다.
+#
+#     장기 — 실적이 꾸준히 늘고, 빚이 적고, 값이 과하지 않은 회사
+#     단기 — 최근 흐름과 거래가 살아난 회사
+#
+# ★ 둘 다에 공통으로 걸어두는 것 ★
+#   하루 거래대금 최소선. 아무리 좋아 보여도 **팔고 싶을 때 못 파는**
+#   종목은 후보가 아닙니다. 사는 것은 언제나 쉽습니다.
 
-    왜 이렇게 거르나:
-      · 시가총액이 너무 작으면 한두 사람이 값을 흔듭니다.
-      · 그날 오간 돈이 적으면 **팔고 싶을 때 못 팝니다.** 아무리 좋아
-        보여도 못 파는 종목은 후보가 아닙니다.
-      · 재무가 한 줄도 없으면 03 펀더멘탈부가 할 일이 없습니다.
-      · ETF 는 회사가 아니라 이 구조로 볼 것이 아닙니다.
-    """
-    return fetch_all(conn, """
+_공통 = """
+           AND t.is_active
+           AND t.kind <> 'ETF'
+           AND t.currency = 'KRW'
+           AND l.market_cap >= %(cap)s
+           AND l.거래대금억 >= %(value)s
+"""
+
+_LAST = """
         WITH last AS (
           SELECT DISTINCT ON (dp.code)
-                 dp.code, dp.close, dp.change_pct, dp.volume, dp.market_cap
+                 dp.code, dp.close, dp.change_pct, dp.volume, dp.market_cap,
+                 dp.per, dp.pbr,
+                 (dp.volume::numeric * dp.close) / 100000000 AS 거래대금억
             FROM daily_price dp
            WHERE dp.trade_date >= (SELECT max(trade_date) FROM daily_price) - 7
            ORDER BY dp.code, dp.trade_date DESC
         )
+"""
+
+
+def screen_long(conn, limit: int = 10, min_cap_eok: int = 1000,
+                min_value_eok: float = 10.0) -> list[tuple]:
+    """
+    장기 — 들고 있을 회사를 찾습니다.
+
+    보는 것:
+      · 매출이 작년 같은 분기보다 늘었는가   (계절을 타므로 같은 분기끼리)
+      · 영업이익이 흑자인가
+      · ROE 가 쓸 만한가, 부채비율이 과하지 않은가
+      · 값이 터무니없지 않은가 (PER)
+
+    ★ 왜 PER 상한을 두나 ★
+      좋은 회사라도 너무 비싸게 사면 오래 들고 있어도 손해입니다.
+      다만 PER 이 낮다고 싼 것도 아닙니다 — 그 판단은 03 펀더멘탈부가
+      업종 가운데값과 견줘서 합니다. 여기서는 터무니없는 것만 걷어냅니다.
+    """
+    return fetch_all(conn, _LAST + """
+        , 최근 AS (
+          SELECT DISTINCT ON (code) code, fiscal_year, fiscal_quarter,
+                 revenue, operating_profit, roe, debt_ratio
+            FROM financial
+           ORDER BY code, fiscal_year DESC, fiscal_quarter DESC
+        )
         SELECT t.code, t.name, t.sector_name, l.close, l.market_cap,
-               (l.volume::numeric * l.close) / 100000000 AS 거래대금억
+               l.거래대금억, f.roe, f.debt_ratio, l.per
+          FROM ticker t
+          JOIN last l  ON l.code = t.code
+          JOIN 최근 f  ON f.code = t.code
+          -- 작년 같은 분기
+          JOIN financial p ON p.code = t.code
+                          AND p.fiscal_year = f.fiscal_year - 1
+                          AND p.fiscal_quarter = f.fiscal_quarter
+         WHERE TRUE """ + _공통 + """
+           AND f.operating_profit > 0
+           AND f.revenue > p.revenue
+           AND f.roe >= %(roe)s
+           AND f.debt_ratio <= %(debt)s
+           AND (l.per IS NULL OR (l.per > 0 AND l.per <= %(per)s))
+         ORDER BY f.roe DESC
+         LIMIT %(limit)s
+    """, {"cap": min_cap_eok, "value": min_value_eok, "roe": 8.0,
+          "debt": 150.0, "per": 40.0, "limit": limit})
+
+
+def screen_short(conn, limit: int = 10, min_cap_eok: int = 1000,
+                 min_value_eok: float = 30.0) -> list[tuple]:
+    """
+    단기 — 지금 움직이고 있는 회사를 찾습니다.
+
+    보는 것:
+      · 최근 5일 거래대금이 그 앞 20일보다 눈에 띄게 늘었는가
+      · 20일 평균 위에 있는가
+      · 변동성이 감당 못 할 정도는 아닌가
+
+    ★ 거래대금 최소선을 장기보다 높게 잡습니다 ★
+      단기는 들어갔다 나오는 일이라 더 자주 팝니다. 한산한 종목에서
+      단기로 움직이면 사고팔 때마다 값이 밀립니다.
+
+    ★ 변동성에 상한을 둡니다 ★
+      많이 흔들리는 종목이 '기회' 처럼 보이지만, 그건 올라갈 폭이
+      크다는 뜻인 만큼 내려갈 폭도 크다는 뜻입니다. 초보자가 가장
+      크게 다치는 자리라 아예 후보에서 뺍니다.
+
+    ★ 이 거르기는 '오를 종목' 을 찾는 것이 아닙니다 ★
+      최근에 사람들이 몰렸다는 사실만 말합니다. 그게 왜인지,
+      계속될 것인지는 02~05 부서가 봅니다.
+    """
+    return fetch_all(conn, _LAST + """
+        , 흐름 AS (
+          SELECT code,
+                 avg(close) FILTER (WHERE rn <= 20)                AS ma20,
+                 avg(volume::numeric * close) FILTER (WHERE rn <= 5)  / 1e8 AS 최근5,
+                 avg(volume::numeric * close) FILTER (WHERE rn BETWEEN 6 AND 25) / 1e8 AS 이전20,
+                 stddev_pop(수익률) FILTER (WHERE rn <= 60) * sqrt(252) * 100 AS 변동성
+            FROM (
+              SELECT code, close, volume,
+                     row_number() OVER (PARTITION BY code ORDER BY trade_date DESC) AS rn,
+                     close / NULLIF(lag(close) OVER (PARTITION BY code ORDER BY trade_date), 0) - 1 AS 수익률
+                FROM daily_price
+               WHERE trade_date >= (SELECT max(trade_date) FROM daily_price) - 130
+                 AND close IS NOT NULL
+            ) x
+           GROUP BY code
+        )
+        SELECT t.code, t.name, t.sector_name, l.close, l.market_cap,
+               l.거래대금억,
+               round(h.최근5::numeric, 1)   AS 최근5일거래대금억,
+               round(h.이전20::numeric, 1)  AS 이전20일거래대금억,
+               round(h.변동성::numeric, 1)  AS 변동성,
+               round((l.close / h.ma20 - 1)::numeric * 100, 2) AS ma20대비
           FROM ticker t
           JOIN last l ON l.code = t.code
-         WHERE t.is_active
-           AND t.kind <> 'ETF'
-           AND t.currency = 'KRW'
-           AND l.market_cap >= %s
-           AND (l.volume::numeric * l.close) / 100000000 >= %s
-           AND EXISTS (SELECT 1 FROM financial f WHERE f.code = t.code)
-         ORDER BY l.market_cap DESC
-         LIMIT %s
-    """, (min_cap_eok, min_value_eok, limit))
+          JOIN 흐름 h ON h.code = t.code
+         WHERE TRUE """ + _공통 + """
+           AND h.ma20 IS NOT NULL
+           AND l.close > h.ma20                      -- 20일 평균 위
+           AND h.이전20 > 0
+           AND h.최근5 >= h.이전20 * %(spike)s        -- 거래가 늘었다
+           AND h.변동성 <= %(vol)s                    -- 너무 흔들리지 않는다
+         ORDER BY (h.최근5 / h.이전20) DESC
+         LIMIT %(limit)s
+    """, {"cap": min_cap_eok, "value": min_value_eok, "spike": 1.5,
+          "vol": 70.0, "limit": limit})
+
+
+# 예전 이름. 장기 거르기를 가리킵니다.
+def screen(conn, limit: int = 20, min_cap_eok: int = 1000,
+           min_value_eok: float = 10.0) -> list[tuple]:
+    return screen_long(conn, limit, min_cap_eok, min_value_eok)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -368,23 +478,46 @@ def risk_facts(conn, code: str) -> dict:
   '위험 없음' 은 대개 안 본 것입니다."""),
 
     "운용부": (DEEP, "네 부서를 모아 결론을 내는 부서", """
-네 부서의 보고서를 읽고 결론을 냅니다.
+네 부서의 보고서를 읽고 **두 관점으로 따로** 결론을 냅니다.
 
-반드시 이 차례로:
-1. **의견** — 다음 셋 중 하나만: `관심` / `보류` / `제외`
-   · 관심 = 더 알아볼 값어치가 있다
-   · 보류 = 지금은 판단할 근거가 모자라다
-   · 제외 = 지금 보기에 안 맞는다
-   ※ '사세요' 라고 쓰지 않습니다. 사는 것은 사람이 정합니다.
-2. **한 줄 이유** — 왜 그렇게 봤는가
-3. **가장 크게 갈린 지점** — 부서들 의견이 어디서 엇갈렸는가
-4. **이 판단이 무너지는 조건** — 무엇이 사실로 드러나면 생각을 바꿔야
-   하는가. 나중에 되돌아볼 수 있게 **확인 가능한 것**으로 쓰세요.
-   (예: "다음 분기 매출이 또 줄면")
-5. **직접 확인할 것** — 사람이 원문을 봐야 할 것 한두 가지
+★ 왜 따로 내나 ★
+  같은 회사가 장기로는 좋고 단기로는 들어갈 자리가 아닐 수 있고,
+  그 반대도 됩니다. 하나로 뭉뚱그리면 둘 다 틀립니다.
 
-★ 이 보고서는 참고 자료이지 권유가 아닙니다. 마지막에 그 점을
-  한 줄로 적으세요."""),
+    장기 — 몇 년 들고 있을 회사인가. 실적이 꾸준한가, 빚이 적은가,
+           지금 값이 과하지 않은가. 02 기술적분석부 이야기는 거의
+           중요하지 않습니다.
+    단기 — 지금 몇 주~몇 달 사이 흐름이 살아 있는가. 거래가 붙었는가.
+           03 펀더멘탈부의 '3년 뒤' 이야기는 거의 중요하지 않습니다.
+
+반드시 이 차례로 씁니다.
+
+## 장기
+1. **의견** — `관심` / `보류` / `제외` 중 하나만
+2. **한 줄 이유**
+3. **무너지는 조건** — 무엇이 사실로 드러나면 생각을 바꿔야 하는가.
+   나중에 확인할 수 있는 것으로 쓰세요. (예: "다음 분기 매출이 또 줄면")
+
+## 단기
+1. **의견** — `관심` / `보류` / `제외` 중 하나만
+2. **한 줄 이유**
+3. **무너지는 조건** — 위와 같되 짧은 기간에 확인할 수 있는 것으로
+
+## 두 관점이 갈린 이유
+장기와 단기 의견이 다르면 **왜 다른지** 한두 줄. 같으면 "같습니다" 라고
+쓰고 넘어갑니다.
+
+## 가장 크게 갈린 지점
+부서들 의견이 어디서 엇갈렸는가. 리스크관리부의 반대가 타당하면
+그렇다고 쓰세요.
+
+## 직접 확인할 것
+사람이 원문을 봐야 할 것 한두 가지.
+
+★ '사세요' 라고 쓰지 않습니다. 사는 것은 사람이 정합니다.
+★ 이 보고서는 참고 자료이지 권유가 아닙니다. 마지막에 한 줄로 적으세요.
+★ 단기 의견은 특히 조심해서 쓰세요. 짧은 기간의 움직임은 앞일을
+  알려주지 않습니다. '최근 이랬다' 와 '앞으로 이럴 것' 은 다릅니다."""),
 }
 
 
@@ -446,3 +579,28 @@ def run_desk(name: str, 자료: dict, 앞선보고: list[Report] | None = None,
         return Report(name, f"[시험] 지침 {len(system):,}자 · 자료 {len(user):,}자 "
                             f"· 모델 {model}", model)
     return Report(name, ask(system, user, model), model)
+
+
+def split_verdicts(글: str) -> tuple[str | None, str | None]:
+    """
+    운용부 보고서에서 장기·단기 의견을 각각 꺼냅니다.
+
+    ★ 머리글을 기준으로 자릅니다 ★
+      글 전체에서 '관심' 을 그냥 찾으면, 아래쪽 '두 관점이 갈린 이유'
+      문단에 나온 '관심' 까지 집어옵니다. 각 문단 안에서만 찾습니다.
+    """
+    import re
+
+    def 조각(머리: str) -> str:
+        m = re.search(rf"##\s*{머리}\s*(.*?)(?=\n##|\Z)", 글, re.S)
+        return m.group(1) if m else ""
+
+    def 의견(조각글: str) -> str | None:
+        # '의견' 줄에서 먼저 찾고, 없으면 조각 안 아무 데서나
+        m = re.search(r"의견\s*[—\-:*]*\s*\**\s*`?(관심|보류|제외)", 조각글)
+        if m:
+            return m.group(1)
+        m = re.search(r"(관심|보류|제외)", 조각글)
+        return m.group(1) if m else None
+
+    return 의견(조각("장기")), 의견(조각("단기"))

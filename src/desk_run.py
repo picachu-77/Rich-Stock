@@ -25,14 +25,17 @@ import sys
 from .db import fetch_all, get_conn
 from .desk import (DEEP, FAST, DeskError, Report, company_news,
                    fundamental_facts, market_facts, risk_facts, run_desk,
-                   screen, tech_facts)
+                   screen_long, screen_short, split_verdicts, tech_facts)
 from .store import save_desk_report
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="여섯 부서로 종목을 봅니다")
     p.add_argument("--code", help="종목 하나만 (없으면 스크리닝 결과)")
-    p.add_argument("--top", type=int, default=3, help="스크리닝 상위 몇 종목 (기본 3)")
+    p.add_argument("--top", type=int, default=3,
+                   help="거르기마다 상위 몇 종목 (기본 3)")
+    p.add_argument("--horizon", choices=["long", "short", "both"], default="both",
+                   help="어느 거르기를 돌릴지 (기본 both)")
     p.add_argument("--min-cap", type=int, default=1000, help="최소 시가총액(억)")
     p.add_argument("--min-value", type=float, default=10.0,
                    help="최소 하루 거래대금(억). 팔 수 있어야 후보입니다")
@@ -46,13 +49,8 @@ def 종목이름(conn, code: str) -> str:
     return rows[0][0] if rows else code
 
 
-def 의견뽑기(글: str) -> str | None:
-    """운용부 보고서에서 관심/보류/제외를 찾습니다."""
-    m = re.search(r"(관심|보류|제외)", 글)
-    return m.group(1) if m else None
-
-
-def 한종목(conn, code: str, name: str, 시장: dict, dry: bool) -> tuple[dict, str | None]:
+def 한종목(conn, code: str, name: str, 시장: dict,
+           dry: bool) -> tuple[dict, str | None, str | None]:
     print(f"\n{'═' * 58}")
     print(f" {name} ({code})")
     print("═" * 58)
@@ -79,7 +77,8 @@ def 한종목(conn, code: str, name: str, 시장: dict, dry: bool) -> tuple[dict
     보고.append(결론)
     print(결론.text)
 
-    return {r.desk: r.text for r in 보고}, 의견뽑기(결론.text)
+    장기, 단기 = split_verdicts(결론.text)
+    return {r.desk: r.text for r in 보고}, 장기, 단기
 
 
 def main() -> None:
@@ -93,34 +92,56 @@ def main() -> None:
     print("=" * 58)
 
     with get_conn() as conn:
+        대상: list[tuple[str, str, str]] = []   # (코드, 이름, 어느 거르기)
+
         if args.code:
-            대상 = [(args.code, 종목이름(conn, args.code))]
+            대상 = [(args.code, 종목이름(conn, args.code), "직접")]
         else:
             print("\n▸ 01 스크리닝부 (규칙으로 거릅니다 — AI 안 씁니다)")
-            rows = screen(conn, args.top, args.min_cap, args.min_value)
-            대상 = [(r[0], r[1]) for r in rows]
-            for r in rows:
-                print(f"   {r[1]} ({r[0]}) · {r[2] or '업종없음'} · "
-                      f"시총 {int(r[4]):,}억 · 하루 거래대금 {float(r[5]):,.0f}억")
+            찾음: dict[str, tuple[str, str]] = {}
+
+            if args.horizon in ("long", "both"):
+                rows = screen_long(conn, args.top, args.min_cap, args.min_value)
+                print(f"\n  [장기] 실적이 늘고, 빚이 적고, 값이 과하지 않은 회사 — {len(rows)}종목")
+                for r in rows:
+                    print(f"    {r[1]} ({r[0]}) · {r[2] or '업종없음'} · "
+                          f"시총 {int(r[4]):,}억 · ROE {float(r[6]):.1f}% · "
+                          f"부채 {float(r[7]):.0f}%")
+                    찾음[r[0]] = (r[1], "long")
+
+            if args.horizon in ("short", "both"):
+                # 단기는 거래대금 최소선을 높게 잡습니다 (자주 사고팝니다)
+                rows = screen_short(conn, args.top, args.min_cap,
+                                    max(args.min_value, 30.0))
+                print(f"\n  [단기] 최근 흐름과 거래가 살아난 회사 — {len(rows)}종목")
+                for r in rows:
+                    print(f"    {r[1]} ({r[0]}) · {r[2] or '업종없음'} · "
+                          f"거래대금 {float(r[7]):,.0f}억 → {float(r[6]):,.0f}억 · "
+                          f"20일평균 대비 {float(r[9]):+.1f}% · 변동성 {float(r[8]):.0f}%")
+                    앞 = 찾음.get(r[0])
+                    찾음[r[0]] = (r[1], "both" if 앞 else "short")
+
+            대상 = [(c, n, h) for c, (n, h) in 찾음.items()]
             if not 대상:
-                print("   조건에 맞는 종목이 없습니다.")
+                print("\n   조건에 맞는 종목이 없습니다.")
                 return
 
         print(f"\n부를 횟수: {len(대상)}종목 × 5번 = {len(대상) * 5}번")
 
         시장 = market_facts(conn)
         저장 = 0
-        for code, name in 대상:
+        for code, name, found_by in 대상:
             try:
-                reports, verdict = 한종목(conn, code, name, 시장, args.dry_run)
+                reports, 장기, 단기 = 한종목(conn, code, name, 시장, args.dry_run)
             except DeskError as exc:
                 print(f"\n! {exc}")
                 sys.exit(1)
             if not args.dry_run:
-                save_desk_report(conn, code, reports, verdict, f"{FAST}+{DEEP}")
+                save_desk_report(conn, code, reports, 장기, 단기, found_by,
+                                 f"{FAST}+{DEEP}")
                 conn.commit()
                 저장 += 1
-                print(f"\n  → 저장했습니다 (의견: {verdict or '못 읽음'})")
+                print(f"\n  → 저장 (장기 {장기 or '못 읽음'} · 단기 {단기 or '못 읽음'})")
 
         print(f"\n{'=' * 58}")
         print(f" 끝. {저장}건 저장" if 저장 else " 끝. (시험이라 저장하지 않았습니다)")
