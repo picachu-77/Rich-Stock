@@ -163,11 +163,33 @@ CREATE TABLE IF NOT EXISTS financial (
     total_equity    BIGINT,             -- 자본총계 (자기자본)
     total_liabilities BIGINT,           -- 부채총계
     total_assets    BIGINT,             -- 자산총계
+    -- 유동비율(유동자산 ÷ 유동부채)을 내려고 함께 둡니다.
+    -- 1년 안에 갚아야 할 빚을, 1년 안에 돈이 될 자산으로 덮을 수 있는가.
+    -- 부채비율은 '빚이 얼마나 많은가' 이고 유동비율은 '당장 버틸 수
+    -- 있는가' 라서, 둘은 다른 것을 말합니다.
+    --
+    -- ★ 새로 받는 것이 아닙니다 ★
+    --   DART 주요계정 호출에 이미 함께 오고 있었는데 안 뽑고 있었습니다.
+    current_assets      BIGINT,         -- 유동자산
+    current_liabilities BIGINT,         -- 유동부채
     dividend_total  BIGINT,             -- 현금배당금총액
 
     report_code     TEXT,               -- DART 보고서 코드 (11013/11012/11014/11011)
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 나중에 더한 칸들. CREATE TABLE IF NOT EXISTS 는 **이미 있는 표를
+-- 고치지 않습니다.** 위 정의만 바꾸면 새로 만드는 창고에서만 생기고,
+-- 이미 돌고 있는 창고에는 영영 안 생깁니다. 실제로 한 번 그랬습니다.
+--
+--   유동비율 = 유동자산 ÷ 유동부채
+--   1년 안에 갚아야 할 빚을 1년 안에 돈이 될 자산으로 덮을 수 있는가.
+--   부채비율이 '빚이 많은가' 라면 이건 '당장 버틸 수 있는가' 입니다.
+--
+--   DART 주요계정 호출에 이미 함께 오고 있었습니다. 안 뽑고 있었을 뿐이라
+--   새로 받을 것이 없습니다. (영업활동현금흐름은 안 옵니다)
+ALTER TABLE financial ADD COLUMN IF NOT EXISTS current_assets      BIGINT;
+ALTER TABLE financial ADD COLUMN IF NOT EXISTS current_liabilities BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_fin_code      ON financial (code, fiscal_year DESC, fiscal_quarter DESC);
 CREATE INDEX IF NOT EXISTS idx_fin_period    ON financial (fiscal_year DESC, fiscal_quarter DESC);

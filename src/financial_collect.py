@@ -75,6 +75,10 @@ ACCOUNT_ALIASES = {
     "total_assets": ["자산총계"],
     "total_liabilities": ["부채총계"],
     "total_equity": ["자본총계"],
+    # 정찰로 확인했습니다 — 주요계정 호출에 이미 함께 옵니다.
+    # (영업활동현금흐름은 안 옵니다. FCF 를 보려면 다른 창구가 필요합니다)
+    "current_assets": ["유동자산"],
+    "current_liabilities": ["유동부채"],
 }
 
 
@@ -181,6 +185,8 @@ def build_metrics(code: str, year: int, quarter: int, items: list[dict]) -> tupl
     assets = _pick(items, ACCOUNT_ALIASES["total_assets"])
     liabilities = _pick(items, ACCOUNT_ALIASES["total_liabilities"])
     equity = _pick(items, ACCOUNT_ALIASES["total_equity"])
+    cur_assets = _pick(items, ACCOUNT_ALIASES["current_assets"])
+    cur_liabs = _pick(items, ACCOUNT_ALIASES["current_liabilities"])
 
     if all(v is None for v in (revenue, op_profit, net_income, assets, equity)):
         return None
@@ -204,6 +210,7 @@ def build_metrics(code: str, year: int, quarter: int, items: list[dict]) -> tupl
         roe, debt_ratio, op_margin, None,          # payout_ratio 는 나중에 채움
         revenue, op_profit, net_income,
         equity, liabilities, assets,
+        cur_assets, cur_liabs,
         None,                                       # dividend_total
         REPORT_CODE[quarter],
     )
@@ -215,6 +222,7 @@ INSERT INTO financial (
     roe, debt_ratio, op_margin, payout_ratio,
     revenue, operating_profit, net_income,
     total_equity, total_liabilities, total_assets,
+    current_assets, current_liabilities,
     dividend_total, report_code
 ) VALUES %s
 ON CONFLICT (code, fiscal_year, fiscal_quarter) DO UPDATE SET
@@ -227,6 +235,8 @@ ON CONFLICT (code, fiscal_year, fiscal_quarter) DO UPDATE SET
     total_equity      = EXCLUDED.total_equity,
     total_liabilities = EXCLUDED.total_liabilities,
     total_assets      = EXCLUDED.total_assets,
+    current_assets      = EXCLUDED.current_assets,
+    current_liabilities = EXCLUDED.current_liabilities,
     report_code       = EXCLUDED.report_code,
     updated_at        = now();
 """
