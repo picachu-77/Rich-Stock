@@ -24,6 +24,8 @@ export type Quarter = {
   roe: number | null;
   debt: number | null;
   opMargin: number | null;
+  /** 유동비율 — 1년 안에 갚을 빚을 1년 안에 돈이 될 자산으로 덮는가 */
+  current: number | null;
   /** 매출액 · 영업이익 (억 원). 창고에는 원으로 있어 여기서 나눕니다. */
   revenue: number | null;
   opProfit: number | null;
@@ -74,10 +76,12 @@ export async function getTrend(code: string, limit = 12): Promise<Quarter[]> {
         op_margin: string | number | null;
         revenue: string | number | null;
         operating_profit: string | number | null;
+        current_assets: string | number | null;
+        current_liabilities: string | number | null;
       }[]
     >`
       SELECT fiscal_year, fiscal_quarter, roe, debt_ratio, op_margin,
-             revenue, operating_profit
+             revenue, operating_profit, current_assets, current_liabilities
         FROM financial
        WHERE code = ${code}
        ORDER BY fiscal_year DESC, fiscal_quarter DESC
@@ -100,6 +104,14 @@ export async function getTrend(code: string, limit = 12): Promise<Quarter[]> {
         roe: n(r.roe),
         debt: n(r.debt_ratio),
         opMargin: n(r.op_margin),
+        // 유동비율 = 유동자산 ÷ 유동부채 × 100
+        current: (() => {
+          const a = n(r.current_assets);
+          const b = n(r.current_liabilities);
+          return a === null || b === null || b <= 0
+            ? null
+            : Math.round((a / b) * 1000) / 10;
+        })(),
         revenue: 억(r.revenue),
         opProfit: 억(r.operating_profit),
       }))

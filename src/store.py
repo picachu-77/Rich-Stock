@@ -537,24 +537,3 @@ def save_dividends(conn, rows: list[tuple]) -> int:
         """,
         rows,
     )
-
-
-def save_desk_report(conn, code: str, reports: dict,
-                     verdict_long: str | None, verdict_short: str | None,
-                     found_by: str, models: str) -> int:
-    """
-    부서 보고서를 저장합니다.
-
-    덮어쓰지 않고 쌓습니다. 한 달 전에 '제외' 라고 본 종목을 이번에
-    '관심' 으로 봤다면, 그 변화 자체가 봐야 할 것입니다.
-    """
-    import json as _json
-    with conn.cursor() as cur:
-        cur.execute(
-            """INSERT INTO desk_report
-                 (code, reports, verdict_long, verdict_short, found_by, models)
-               VALUES (%s, %s, %s, %s, %s, %s)""",
-            (code, _json.dumps(reports, ensure_ascii=False),
-             verdict_long, verdict_short, found_by, models),
-        )
-    return 1

@@ -106,13 +106,15 @@ export default function TrendTable({ rows }: { rows: Quarter[] }) {
             {line("ROE", (q) => q.roe, true)}
             {line("영업이익률", (q) => q.opMargin, true)}
             {line("부채비율", (q) => q.debt)}
+            {qs.some((q) => q.current !== null) && line("유동비율", (q) => q.current)}
           </tbody>
         </table>
       </div>
       <p className="tt-note">
         매출은 판 돈, 영업이익은 그중 남은 돈입니다. ROE 는 자기 돈으로 얼마나
         벌었는지, 영업이익률은 판 돈 중 얼마가 남았는지, 부채비율은 빚이 자기
-        돈의 몇 %인지입니다.
+        돈의 몇 %인지, 유동비율은 1년 안에 갚을 빚을 1년 안에 돈이 될
+        자산으로 덮을 수 있는지입니다 — 100% 아래면 빠듯하다는 뜻입니다.
         {금액있음 && (
           <>
             {" "}
