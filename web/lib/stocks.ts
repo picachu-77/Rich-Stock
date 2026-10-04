@@ -8,6 +8,7 @@
 import { sql } from "./db";
 import { NEAR_DAYS, PERIODS } from "./periods";
 import { sectorName } from "./ksic";
+import { getPicks, type Pick } from "./screens";
 
 /**
  * 목록 화면에 필요한 것만 담은 가벼운 모양.
@@ -42,6 +43,9 @@ export type ListStock = {
   ret1m: number | null;
   /** 1년 수익률(%) — 카드에 보여주고 정렬에도 씁니다 */
   ret1y: number | null;
+  /** 장기·단기 거르기에 걸렸는가. 걸린 종목에만 값이 있습니다
+      (4천 종목 전부에 붙이면 목록이 무거워집니다) */
+  pick: Pick | null;
 };
 
 /** 종목 하나를 자세히 볼 때 쓰는 모양. */
@@ -82,6 +86,9 @@ const toNum = (v: unknown): number | null =>
  * 하루에 한 번만 바뀌는 자료라, 화면 쪽에서 캐시해 두고 씁니다.
  */
 export async function getStocks(): Promise<ListStock[]> {
+  // 후보는 따로 뽑습니다. 아래 쿼리는 4천 종목을 145ms 에 집어오도록
+  // 맞춰둔 것이라, 여기에 재무·시세 집계를 얹으면 그 성질이 깨집니다.
+  const picksP = getPicks();
   // 목록에 필요한 기간은 1개월과 1년 두 개뿐입니다.
   const want = [
     { key: "ret1m", interval: "1 month" },
@@ -127,6 +134,8 @@ export async function getStocks(): Promise<ListStock[]> {
      WHERE t.is_active
   `);
 
+  const picks = await picksP;
+
   const pct = (cur: number | null, past: number | null) =>
     cur === null || past === null || past === 0
       ? null
@@ -165,6 +174,7 @@ export async function getStocks(): Promise<ListStock[]> {
       div_yield: toNum(r.div_yield),
       ret1m: pct(base, toNum(r.past0)),
       ret1y: pct(base, toNum(r.past1)),
+      pick: picks.get(String(r.code)) ?? null,
     };
   });
 }

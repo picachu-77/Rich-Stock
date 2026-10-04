@@ -852,6 +852,20 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 }
 .liq-care b { color: var(--ink); }
 
+/* 후보 거르기 설명 — 무엇으로 걸렀는지 */
+.screen-note {
+  margin: 10px 0 0; padding: 11px 13px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  font-size: .76rem; line-height: 1.7; color: var(--ink-2);
+}
+.screen-note > b { color: var(--ink); font-weight: 700; }
+.screen-care {
+  display: block; margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid var(--rule-2);
+  color: var(--ink);
+}
+
 /* ── 배당 ──────────────────────────────────────────────────
    색을 쓰지 않습니다. 배당은 오르내리는 것이 아닙니다. */
 .dv-next {

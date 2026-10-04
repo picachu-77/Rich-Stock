@@ -14,10 +14,21 @@ import type { ListStock } from "@/lib/stocks";
 import { chosungOf, scoreOf } from "@/lib/search";
 import SectorPicker from "./SectorPicker";
 import { eok, limitHit, num, price, signed, tone } from "@/lib/format";
+import { 기준 } from "@/lib/screen-rules";
 
-type SortKey = "시가총액" | "많이 오른" | "많이 내린" | "1년 수익률" | "PER 낮은" | "배당 높은";
+type SortKey =
+  | "장기 후보" | "단기 후보"
+  | "시가총액" | "많이 오른" | "많이 내린" | "1년 수익률" | "PER 낮은" | "배당 높은";
 
-const SORTS: SortKey[] = ["시가총액", "많이 오른", "많이 내린", "1년 수익률", "PER 낮은", "배당 높은"];
+/** ★ 후보 둘을 맨 앞에 둡니다 ★
+    '무엇부터 볼까' 에 답하는 것이라, 줄 세우기보다 먼저 와야 합니다. */
+const SORTS: SortKey[] = [
+  "장기 후보", "단기 후보",
+  "시가총액", "많이 오른", "많이 내린", "1년 수익률", "PER 낮은", "배당 높은",
+];
+
+/** 후보 거르기는 '줄 세우기' 가 아니라 '걸러내기' 입니다 */
+const 후보정렬 = (s: SortKey) => s === "장기 후보" || s === "단기 후보";
 
 /** 한 번에 그리는 개수. 너무 많이 그리면 휴대폰이 버벅입니다. */
 const PAGE = 30;
@@ -103,6 +114,19 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
         return asc ? x - y : y - x;
       });
 
+    // 후보는 줄 세우기가 아니라 걸러내기입니다. 조건에 맞은 것만
+    // 남기고, 그 안에서 '왜 걸렸는지' 가 센 것부터 보여줍니다.
+    if (sort === "장기 후보") {
+      return 후보
+        .filter((s) => s.pick?.long)
+        .sort((a, b) => (b.pick?.roe ?? -1) - (a.pick?.roe ?? -1));
+    }
+    if (sort === "단기 후보") {
+      return 후보
+        .filter((s) => s.pick?.short)
+        .sort((a, b) => (b.pick?.spike ?? -1) - (a.pick?.spike ?? -1));
+    }
+
     switch (sort) {
       case "많이 오른":   return by((s) => s.change_pct);
       case "많이 내린":   return by((s) => s.change_pct, true);
@@ -184,7 +208,9 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
       <p className="count" role="status" aria-live="polite">
         {searching
           ? `'${q.trim()}' 로 ${num(view.length)}개를 찾았습니다`
-          : `${num(view.length)}개 종목 · ${sort} 순`}
+          : 후보정렬(sort)
+            ? `조건에 맞는 ${num(view.length)}개 · ${sort}`
+            : `${num(view.length)}개 종목 · ${sort} 순`}
         {!searching && 거른중 && (
           <>
             {" · "}
@@ -204,6 +230,48 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
           </>
         )}
       </p>
+
+      {/* ★ 무엇으로 걸렀는지를 반드시 밝힙니다 ★
+          기준을 숨기고 이름만 늘어놓으면 '앱이 고른 종목' 이 됩니다.
+          조건을 보여줘야 보는 사람이 동의하거나 반대할 수 있습니다. */}
+      {!searching && 후보정렬(sort) && (
+        <div className="screen-note">
+          <b>{sort === "장기 후보" ? "장기" : "단기"}</b>
+          {sort === "장기 후보" ? (
+            <>
+              {" "}— 매출이 작년 같은 분기보다 늘고, 영업이익이 흑자이고,
+              ROE <span className="n">{기준.최소ROE}%</span> 위,
+              부채비율 <span className="n">{기준.최대부채비율}%</span> 아래,
+              PER <span className="n">{기준.최대PER}</span> 아래인 회사.
+            </>
+          ) : (
+            <>
+              {" "}— 최근 5일 거래대금이 그 앞 20일의{" "}
+              <span className="n">{기준.거래급증배수}배</span> 넘고,
+              20일 평균 위에 있고, 연 변동성이{" "}
+              <span className="n">{기준.최대변동성}%</span> 아래인 회사.
+            </>
+          )}{" "}
+          둘 다 시가총액 <span className="n">{num(기준.최소시총억)}억</span> 위,
+          하루 거래대금{" "}
+          <span className="n">
+            {sort === "장기 후보" ? 기준.장기거래대금억 : 기준.단기거래대금억}억
+          </span>{" "}
+          위입니다 — 팔고 싶을 때 팔려야 후보입니다.
+          <span className="screen-care">
+            조건에 맞았다는 뜻이지 <b>오를 종목이라는 뜻이 아닙니다.</b>{" "}
+            왜 그런지는 눌러서 직접 보세요.
+          </span>
+        </div>
+      )}
+
+      {view.length === 0 && !searching && 후보정렬(sort) && (
+        <div className="empty">
+          <b>조건에 맞는 종목이 없습니다</b>
+          오늘은 이 기준을 넘는 종목이 없다는 뜻입니다. 기준을 낮춰
+          억지로 만들지 않습니다.
+        </div>
+      )}
 
       {view.length === 0 && !searching && 거른중 && (
         <div className="empty">
@@ -254,6 +322,25 @@ export default function StockList({ stocks }: { stocks: ListStock[] }) {
                   )}
                   {sort === "배당 높은" && !!s.div_yield && (
                     <span>배당 <b className="n">{num(s.div_yield, 2)}%</b></span>
+                  )}
+                  {/* 왜 걸렸는지를 같이 보여줍니다. 이름만 늘어놓으면
+                      '앱이 고른 종목' 이 되고, 그건 이 앱이 하려던 일과
+                      정반대입니다. */}
+                  {sort === "장기 후보" && s.pick?.roe !== null && (
+                    <>
+                      <span>ROE <b className="n">{num(s.pick!.roe!, 1)}%</b></span>
+                      {s.pick?.debt !== null && (
+                        <span>부채 <b className="n">{num(s.pick!.debt!, 0)}%</b></span>
+                      )}
+                    </>
+                  )}
+                  {sort === "단기 후보" && s.pick?.spike !== null && (
+                    <>
+                      <span>거래 <b className="n">{num(s.pick!.spike!, 1)}배</b></span>
+                      {s.pick?.ma20Gap !== null && (
+                        <span>20일선 <b className="n">{signed(s.pick!.ma20Gap!, 1)}%</b></span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
