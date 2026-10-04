@@ -220,6 +220,54 @@ def probe_document(rcept_no: str) -> None:
     print("    " + plain[:1500])
 
 
+def probe_accounts(dart: DartClient, corp: str, year: int) -> None:
+    """
+    4) fnlttMultiAcnt — 재무 호출이 **어떤 계정까지 주는지**.
+
+    지금 우리는 매출·영업이익·순이익·자산·부채·자본 여섯 개만 뽑아
+    쓰고 있습니다. 그런데 같은 호출에 다른 계정도 함께 올 수 있습니다.
+    이미 받고 있는데 안 쓰는 것이 있다면 공짜로 늘릴 수 있습니다.
+
+    특히 보고 싶은 것: 유동자산·유동부채 (→ 유동비율)
+    """
+    show(f"4) fnlttMultiAcnt — 재무 호출이 주는 계정 전부 ({year}년)")
+    try:
+        data = dart.get(
+            "fnlttMultiAcnt",
+            corp_code=corp,
+            bsns_year=str(year),
+            reprt_code=REPORT_CODE[4],
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! 부르지 못했습니다: {exc}")
+        return
+
+    print(f"  status = {data.get('status')}  ({data.get('message')})")
+    items = data.get("list") or []
+    if not items:
+        print("  자료 없음")
+        return
+
+    보임 = {}
+    for it in items:
+        nm = (it.get("account_nm") or "").strip()
+        if nm and nm not in 보임:
+            보임[nm] = (it.get("fs_div"), it.get("thstrm_amount"))
+
+    print(f"  {len(items)}줄 · 계정 이름 {len(보임)}가지")
+    print()
+    for nm, (fs, amt) in sorted(보임.items()):
+        print(f"    {nm:28} fs={fs}  {amt}")
+
+    print()
+    찾는것 = ["유동자산", "유동부채", "비유동자산", "비유동부채",
+             "이익잉여금", "자본금", "매출총이익", "영업활동현금흐름"]
+    print("  ★ 넣고 싶은 것이 오는가")
+    for 이름 in 찾는것:
+        있음 = any(이름 in nm for nm in 보임)
+        print(f"    {이름:16} {'온다  ✓' if 있음 else '안 온다'}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="배당 기준일을 어디서 받을지 확인만 합니다")
     p.add_argument("--code", default="005930", help="종목코드 (기본 005930 삼성전자)")
@@ -247,6 +295,8 @@ def main() -> None:
         probe_document(found[0]["rcept_no"])
     else:
         print("\n  배당 공시를 못 찾아 3)은 건너뜁니다.")
+
+    probe_accounts(dart, corp, args.year)
 
     print()
     print("=" * 62)
