@@ -10,14 +10,12 @@ import TabBar from "@/components/TabBar";
  * 주인공은 숫자라, 숫자만 따로 이 글꼴로 받습니다. 라틴 문자만 받으면
  * 20KB 안팎입니다.
  *
- * 한글은 IBM Plex Sans KR 을 씁니다 (globals.css). 같은 집안이라 뼈대와
- * 글자 높이가 맞아서, 한글과 숫자가 한 줄에 섞여도 어긋나 보이지
- * 않습니다. 한글 웹폰트는 원래 몇 MB 짜리지만, 글자마다 쪼개 받는
- * 방식이라 화면에 실제로 쓰인 몫만 옵니다.
+ * 한글은 Pretendard 를 씁니다 (globals.css · public/fonts).
+ * 한글 웹폰트는 원래 몇 MB 짜리지만, 글자마다 쪼개 받는 방식이라
+ * 화면에 실제로 쓰인 몫만 옵니다.
  *
- * 두 글꼴 모두 굵기가 700 까지입니다. 그보다 굵게 적으면 브라우저가
- * 억지로 굵혀 그려서 한글이 번져 보입니다 — 그래서 700 을 넘기지
- * 않습니다.
+ * 굵기는 700 을 넘기지 않습니다. 이 글꼴(IBM Plex Mono)이 700 까지라,
+ * 그보다 굵게 적으면 브라우저가 억지로 굵혀 그려서 번져 보입니다.
  */
 const mono = IBM_Plex_Mono({
   subsets: ["latin"],
@@ -51,15 +49,14 @@ export default function RootLayout({
   return (
     <html lang="ko" className={mono.variable}>
       <head>
-        {/* 한글 글꼴. 글자마다 쪼개 받기라 화면에 쓰인 글자 몫만
-            내려받습니다. display=swap 이라 글꼴이 늦어도 글은 먼저
-            뜹니다 — 빈 화면을 보여주지 않습니다. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap"
-        />
+        {/* 한글 글꼴(Pretendard). 같은 집에 두고 가져옵니다 —
+            바깥 주소로 접속을 새로 틀 일이 없어 더 빠르고, 그 주소가
+            죽어도 우리와 상관없습니다.
+
+            글자마다 쪼개 받기(unicode-range)라 화면에 실제로 쓰인
+            글자가 든 조각만 내려받습니다. display:swap 이라 글꼴이
+            늦어도 글은 먼저 뜹니다 — 빈 화면을 보여주지 않습니다. */}
+        <link rel="stylesheet" href="/fonts/pretendard/pretendard.css" />
       </head>
       <body>
         {children}

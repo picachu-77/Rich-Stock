@@ -110,12 +110,17 @@ body {
   background: var(--paper);
   color: var(--ink);
   /* 한글은 기기에 있는 글꼴로. 내려받지 않으니 곧바로 뜹니다. */
-  /* 한글 글꼴 — IBM Plex Sans KR (눈누에 올라와 있는 무료 글꼴).
-     숫자에 쓰는 IBM Plex Mono 와 같은 집안이라 뼈대·높이가 같습니다.
-     글자마다 쪼개 받기(unicode-range) 때문에 화면에 실제로 쓰인
-     글자 몫만 내려받습니다. 못 받으면 기기 글꼴로 그대로 뜹니다. */
-  font-family: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont,
-    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  /* 한글 글꼴 — Pretendard.
+     화면용으로 만든 글꼴이라 속공간이 열려 있고 획 굵기가 고릅니다.
+     전에 쓰던 IBM Plex Sans KR 은 숫자 글꼴과 같은 집안이라는 이유로
+     골랐는데, 실제로 화면에 올려 견줘 보니 작은 글씨에서 획이
+     뭉갰습니다. 글자 폭이 같아 바꿔도 화면이 밀리지 않습니다.
+
+     못 받으면 기기에 있는 글꼴로 그대로 뜹니다 — 애플 기기는
+     Apple SD Gothic Neo, 윈도우는 맑은 고딕입니다. */
+  font-family: "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕",
+    system-ui, sans-serif;
   font-size: 16px;          /* 16px 미만이면 아이폰이 화면을 확대합니다 */
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
